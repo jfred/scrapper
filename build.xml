@@ -1,0 +1,1150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project name="main" basedir="." default="usage" xmlns:ivy="antlib:fr.jayasoft.ivy.ant">
+<!--
+   Scrapper Build template.
+   Author Joshua Frederick <josh@jfred.net>
+-->
+    <!-- this build requires BSF and BSH - so we check this first -->
+    <available classname="org.apache.bsf.BSFException" property="bsf.present"/>
+    <available classname="bsh.util.BeanShellBSFEngine" property="bsh.present"/>
+    <available classname="fr.jayasoft.ivy.ant.IvyConfigure" property="ivy.present"/>
+    <fail unless="bsf.present">
+
+    ERROR: BSF is required to use this build (http://jakarta.apache.org/bsf/)</fail>
+    <fail unless="bsh.present">
+
+    ERROR: BeanShell is required to use this build (http://www.beanshell.org)</fail>
+
+    <!--
+      ===========================================================================================
+      properties
+      ===========================================================================================
+    -->
+    <tstamp>
+      <format property="BUILD_DATE" pattern="yyyy-MM-dd HH:mm:ss z"/>
+      <format property="BUILD_TIMESTAMP" pattern="yyyyMMddHHmm"/>
+    </tstamp>
+    <!-- environment vars -->
+    <property environment="env"/>
+
+    <!-- load user project build settings - should not be stored in cvs-->
+    <property file="build.properties" />
+    <property file="../build.properties" />
+    <!-- load user build settings -->
+    <property file="${user.home}/build.properties" />
+
+    <!-- load project build settings -->
+    <property file="project.properties" />
+    <property file="../project.properties" />
+
+    <!-- default directoried -->
+    <property name="build.base.dir"         value="build" />
+    <property name="dist.base.dir"          value="dist" />
+    <property name="docs.base.dir"          value="docs" />
+    <property name="etc.base.dir"           value="etc" />
+    <property name="lib.base.dir"           value="lib" />
+    <property name="meta.base.dir"          value="meta" />
+    <property name="src.base.dir"           value="src" />
+    <property name="test.base.dir"          value="test" />
+
+    <property name="env.JUNIT_HOME"         value="${lib.base.dir}" />
+    <property name="junit.home"             value="${env.JUNIT_HOME}" />
+
+    <property name="servlet.server.name"    value="" />
+    <property name="servlet.server.version" value="" />
+    <property name="servlet.base.dir"       value="" />
+    <property name="servlet.deploy.dir"     value="${servlet.base.dir}" />
+    <property name="servlet.lib.dir"        value="${servlet.base.dir}" />
+    <property name="servlet.lib.match"      value="not_really_going_to_match_anything" />
+
+    <property name="j2ee.server.name"       value="" />
+    <property name="j2ee.server.version"    value="" />
+    <property name="j2ee.base.dir"          value="" />
+    <property name="j2ee.common.lib.dir"    value="${j2ee.base.dir}" />
+    <property name="j2ee.deploy.dir"        value="${j2ee.base.dir}" />
+    <property name="j2ee.lib.dir"           value="${j2ee.base.dir}" />
+    <property name="j2ee.lib.match"         value="not_really_going_to_match_anything" />
+
+    <property name="javac.debug"            value="true" />
+    <property name="javac.deprecation"      value="false" />
+
+    <property name="build.ivy"              value="false" />
+    <property name="build.debug"            value="true" />
+    <property name="build.project.xml"      value="project.xml" />
+    <property name="build.resourcefile"     value="project.properties" />
+
+    <property file="${build.resourcefile}" />
+
+    <!--
+        ===========================================================================================
+        patternsets
+        ===========================================================================================
+    -->
+    <patternset id="all.patternset">
+        <include name="**/*.*"/>
+    </patternset>
+
+    <patternset id="class.patternset">
+        <include name="**/*.class"/>
+    </patternset>
+
+    <patternset id="ejb.patternset">
+        <include name="**/ejb/**/*.class"/>
+    </patternset>
+
+    <patternset id="war.patternset">
+        <include name="**/*.war"/>
+    </patternset>
+
+    <patternset id="jar.patternset">
+        <include name="**/*.jar"/>
+        <exclude name="bioscience-build.jar"/>
+    </patternset>
+
+    <patternset id="config.patternset">
+        <include name="**/*-config.xml"/>
+    </patternset>
+        
+    <patternset id="java.patternset">
+        <include name="**/*.java" />
+    </patternset>
+
+    <patternset id="properties.patternset">
+        <include name="**/*.properties" />
+    </patternset>
+
+    <patternset id="tld.patternset">
+        <include name="**/*.tld" />
+    </patternset>
+
+    <patternset id="dtd.patternset">
+        <include name="**/*.dtd"/>
+    </patternset>
+
+    <patternset id="xml.patternset">
+        <include name="**/*.xml"/>
+    </patternset>
+
+    <!--
+        ===========================================================================================
+        filtersets
+        ===========================================================================================
+    -->
+    <!-- setting up app server properties (needs to be here to be used by path refs) - also the cause of the annoying 'Overriding previous definition of reference to...' messages!-->
+    <script language="beanshell">
+    <![CDATA[
+        import org.apache.tools.ant.*;
+        import java.io.*;
+        
+        // setup deployment server
+        if (project.getProperty("build.configured") == null){
+            project.setProperty("build.configured", "true");
+            if (project.getProperty("j2ee.server.name") != null && project.getProperty("j2ee.base.dir") != null){
+                project.setProperty("build.deploy.ear", "true");
+                String servername = project.getProperty("j2ee.server.name");
+                String basedir    = project.getProperty("j2ee.base.dir");
+                // orion with auto deploy dir set to $orion/applications/auto
+                if (servername.equalsIgnoreCase("orion")){
+                    project.setProperty("j2ee.deploy.dir",     basedir+"/applications/auto");
+                    project.setProperty("j2ee.lib.dir",        basedir);
+                    project.setProperty("j2ee.common.lib.dir", basedir+"/lib");
+                    project.setProperty("j2ee.lib.match",      "orion.jar ejb.jar");
+                }
+                // websphere - deploy is not supported
+                else if (servername.equalsIgnoreCase("websphere")){
+                    project.setProperty("j2ee.lib.dir",        basedir+"/lib");
+                    project.setProperty("j2ee.lib.match",      "j2ee.jar");
+                    project.setProperty("build.deploy.ear",    "false");
+                }
+            }
+            if (project.getProperty("servlet.server.name") != null && project.getProperty("servlet.base.dir") != null && project.getProperty("servlet.base.dir").length() > 0){
+                project.setProperty("build.deploy.war", "true");
+    
+                String servername = project.getProperty("servlet.server.name");
+                String basedir    = project.getProperty("servlet.base.dir");
+                // tomcat
+                if (servername.equalsIgnoreCase("tomcat")){
+                    project.setProperty("servlet.deploy.dir",     basedir+"/webapps");
+                    project.setProperty("servlet.lib.dir",        basedir+"/common/lib");
+                    project.setProperty("servlet.common.lib.dir", basedir+"/common/lib");
+                    project.setProperty("servlet.lib.match",      "servlet*.jar");
+                }
+            }
+        }
+    ]]>
+    </script>
+ 
+    <!--
+        ===========================================================================================
+        paths
+        ===========================================================================================
+    -->
+    <path id="web.classpath">
+        <fileset dir="${servlet.lib.dir}" includes="${servlet.lib.match}" />
+        <fileset dir="${j2ee.lib.dir}" includes="${j2ee.lib.match}" />
+    </path>    
+
+    <path id="javadoc.classpath">
+        <fileset dir="${lib.base.dir}">
+            <patternset refid="jar.patternset"/>
+        </fileset>
+        <path refid="web.classpath" />
+    </path>
+
+    <path id="compile.classpath">
+        <fileset dir="${lib.base.dir}">
+            <patternset refid="jar.patternset"/>
+        </fileset>
+        <path refid="web.classpath" />
+        <pathelement path="${build.classpath.add}" />
+    </path>
+
+    <path id="run.classpath">
+        <fileset dir="${dist.base.dir}">
+            <patternset refid="jar.patternset"/>
+        </fileset>
+        <path refid="compile.classpath" />
+    </path>
+
+    <!--
+        ===========================================================================================
+        macrodefs
+        ===========================================================================================
+    -->
+    <!-- ivy macrodef -->
+    <macrodef name="resolve-internal">
+        <sequential>
+            <available property="build.lib.present" file="${lib.base.dir}" type="dir" />
+            <script language="beanshell">
+            <![CDATA[
+                import org.apache.tools.ant.*;
+
+                String libPresent = project.getProperty("build.lib.present");
+                if (!"true".equals(libPresent)){
+                    String useIvy = project.getProperty("build.ivy");
+                    Task task = null;
+                    if ("true".equalsIgnoreCase(useIvy)){
+                        task = project.createTask("resolve ivy");
+                       }
+                       if (task != null){
+                        try {
+                            task.perform();
+                        }
+                        catch (Throwable e){
+                            task = project.createTask("fail");
+                            wrapper = task.getRuntimeConfigurableWrapper();
+                            wrapper.setAttribute("message", e.getMessage());
+                            task.perform();
+                        }
+                       }
+                }
+            ]]>
+            </script>
+        </sequential>
+    </macrodef>
+    <macrodef name="resolve ivy">
+        <sequential>
+            <ivy:retrieve/>
+        </sequential>
+    </macrodef>
+
+    <!-- module specific javadoc -->
+    <macrodef name="module-prepare">
+        <attribute name="module" />
+        <sequential>
+        </sequential>
+    </macrodef>
+
+    <macrodef name="clean">
+        <sequential>
+            <delete dir="${dist.base.dir}"/>
+            <delete dir="${build.base.dir}"/>
+            <script language="beanshell">
+            <![CDATA[
+                import org.apache.tools.ant.*;
+                String useIvy = project.getProperty("build.ivy.clean");
+                Task task = null;
+                if ("true".equalsIgnoreCase(useIvy)){
+                    task = project.createTask("delete");
+                    RuntimeConfigurable wrapper = task.getRuntimeConfigurableWrapper();
+                    wrapper.setAttribute("dir", "${lib.base.dir}");
+                   }
+                   if (task != null){
+                    try {
+                        task.perform();
+                    }
+                    catch (Throwable e){
+                        task = project.createTask("fail");
+                        wrapper = task.getRuntimeConfigurableWrapper();
+                        wrapper.setAttribute("message", e.getMessage());
+                        task.perform();
+                    }
+                   }
+            ]]>
+            </script>
+        </sequential>
+    </macrodef>
+
+    <macrodef name="module-init">
+        <attribute name="module" />
+        <attribute name="src" default="${src.base.dir}/${project.module.@{module}.src}"/>
+        <sequential>
+            <mkdir dir="@{src}"/>
+        </sequential>
+    </macrodef>
+
+    <!-- module specific javadoc -->
+    <macrodef name="module-javadoc">
+        <attribute name="module" />
+        <attribute name="src" default="${src.base.dir}/${project.module.@{module}.src}"/>
+        <attribute name="dest" default="${docs.base.dir}/api/@{module}"/>
+        <attribute name="classpath" default="javadoc.classpath"/>
+        <sequential>
+            <javadoc destdir="@{dest}" package="*" author="true" version="true" use="true" windowtitle="@{module}">
+                <classpath>
+                    <path refid="@{classpath}"/>
+                    <fileset dir="${dist.base.dir}" includes="${project.module.@{module}.require.match} ${project.module.@{module}.require}" />
+                    <fileset dir="${lib.base.dir}"  includes="${project.module.@{module}.require.match} ${project.module.@{module}.require}" />
+                    <dirset dir="${build.base.dir}" >
+                        <depth max="1" />
+                        <include name="*"/>
+                        <include name="**/classes"/>
+                    </dirset>
+                </classpath>
+                <fileset dir="@{src}" defaultexcludes="yes">
+                    <include name="*/**/*.java" />
+                </fileset>
+                <link href="http://java.sun.com/j2se/1.4.2/docs/api/"/>
+                <link href="http://java.sun.com/j2ee/1.4/docs/api/"/>
+            </javadoc>
+        </sequential>
+    </macrodef>
+
+    <!-- module specific javac -->
+    <macrodef name="module-javac">
+        <attribute name="module" />
+        <attribute name="src" default="${src.base.dir}/${project.module.@{module}.src}"/>
+        <attribute name="dest" default="${build.base.dir}/@{module}/classes"/>
+        <attribute name="classpath" default="compile.classpath"/>
+        <sequential>
+            <mkdir dir="@{src}"/>
+            <mkdir dir="@{dest}"/>
+            <javac
+                destdir="@{dest}"
+                srcdir="@{src}"
+                debug="${javac.debug}"
+                deprecation="${javac.deprecation}"
+            >
+                <classpath>
+                    <path refid="@{classpath}"/>
+                    <fileset dir="${dist.base.dir}" includes="${project.module.@{module}.require.match}" />
+                    <fileset dir="${lib.base.dir}"  includes="${project.module.@{module}.require.match}" />
+                    <dirset dir="${build.base.dir}" >
+                        <depth max="1" />
+                        <include name="*"/>
+                        <include name="**/classes"/>
+                    </dirset>
+                </classpath>
+            </javac>
+        </sequential>
+    </macrodef>
+
+    <!-- module specific javac -->
+    <macrodef name="module-ejb-javac">
+        <attribute name="module" />
+        <attribute name="src" default="${src.base.dir}/${project.module.@{module}.src}"/>
+        <attribute name="dest" default="${build.base.dir}/@{module}/classes"/>
+        <attribute name="classpath" default="compile.classpath"/>
+        <sequential>
+            <mkdir dir="@{src}"/>
+            <mkdir dir="@{dest}"/>
+            <javac
+                destdir="@{dest}"
+                srcdir="@{src}"
+                debug="${javac.debug}"
+                deprecation="${javac.deprecation}"
+                depend="true"
+                includes="**/ejb/**"
+            >
+                <classpath>
+                    <path refid="@{classpath}"/>
+                    <fileset dir="${dist.base.dir}" includes="${project.module.@{module}.require.match}" />
+                    <fileset dir="${lib.base.dir}"  includes="${project.module.@{module}.require.match}" />
+                </classpath>
+            </javac>
+        </sequential>
+    </macrodef>
+
+    <!-- module specific junit tests -->
+    <macrodef name="module-junit">
+        <attribute name="module" />
+        <attribute name="src" default="${test.base.dir}/${project.module.@{module}.src}"/>
+        <attribute name="build" default="${build.base.dir}/@{module}/test"/>
+        <attribute name="dest" default="${docs.base.dir}/test/@{module}"/>
+        <attribute name="classpath" default="compile.classpath"/>
+        <sequential>
+            <mkdir dir="@{src}"/>
+            <mkdir dir="@{build}"/>
+            <mkdir dir="@{dest}"/>
+            
+            <!-- compile tests -->
+            <javac
+                destdir="@{build}"
+                srcdir="@{src}"
+                debug="${javac.debug}"
+                deprecation="${javac.deprecation}"
+            >
+                <classpath>
+                    <path refid="@{classpath}"/>
+                    <fileset dir="${dist.base.dir}" includes="${project.module.@{module}.require.match} ${project.module.@{module}.require}" />
+                    <fileset dir="${lib.base.dir}"  includes="${project.module.@{module}.require.match} ${project.module.@{module}.require}" />
+                    <dirset dir="${build.base.dir}" >
+                        <include name="**/classes"/>
+                    </dirset>
+                    <fileset dir="${junit.home}" includes="*junit*.jar"/>
+                </classpath>
+            </javac>
+            <!-- copy resource files (xml, properties) with filtering if available-->
+            <copy todir="@{build}">
+                <filterset refid="build.filterset" />
+                <fileset dir="@{src}">
+                    <patternset refid="properties.patternset"/>
+                    <patternset refid="xml.patternset"/>
+                    <patternset refid="dtd.patternset"/>
+                </fileset>
+            </copy>
+            <!-- run tests -->
+            <junit printsummary="true" failureproperty="build.test.failed" errorproperty="build.test.failed" fork="true">
+                <classpath>
+                    <path refid="@{classpath}"/>
+                    <fileset dir="${dist.base.dir}" includes="${project.module.@{module}.require.match} ${project.module.@{module}.require}" />
+                    <fileset dir="${lib.base.dir}"  includes="${project.module.@{module}.require.match} ${project.module.@{module}.require}" />
+                    <dirset dir="${build.base.dir}" >
+                        <include name="**/classes"/>
+                        <include name="**/test"/>
+                    </dirset>
+                    <fileset dir="${junit.home}" includes="*junit*.jar"/>
+                </classpath>
+                <formatter type="xml"/>
+                <test name="${test}" haltonfailure="yes" if="test" todir="@{build}"/>
+                <batchtest todir="@{build}" unless="test">
+                    <fileset dir="@{src}">
+                        <include name="**/*Test*.java"/>
+                        <include name="**/*test*.java"/>
+                        <exclude name="**/*Abstract*.java"/>
+                    </fileset>
+                </batchtest>
+            </junit>
+
+            <!-- generate junit report -->
+            <junitreport todir="@{dest}">
+              <fileset dir="@{build}">
+                <include name="TEST-*.xml"/>
+              </fileset>
+              <report format="frames" todir="@{dest}"/>
+            </junitreport>        
+
+        </sequential>
+    </macrodef>
+
+    <!-- module specific jar -->
+    <macrodef name="module-jar">
+        <attribute name="module" />
+        <attribute name="src" default="${src.base.dir}/${project.module.@{module}.src}"/>
+        <attribute name="build" default="${build.base.dir}/@{module}/classes"/>
+        <attribute name="dist" default="${dist.base.dir}/${project.module.@{module}.distfile}"/>
+        <sequential>
+            <mkdir dir="@{src}"/>
+            <mkdir dir="@{build}"/>
+            <!-- copy resource files (xml, properties) with filtering if available-->
+            <copy todir="@{build}">
+                <filterset refid="build.filterset" />
+                <fileset dir="@{src}">
+                    <patternset refid="properties.patternset"/>
+                    <patternset refid="xml.patternset"/>
+                    <patternset refid="dtd.patternset"/>
+                </fileset>
+            </copy>
+            <jar jarfile="@{dist}">
+                <manifest>
+                    <attribute name="Build-Date" value="${BUILD_DATE}"/>
+                </manifest>
+                <fileset dir="@{build}" >
+                    <patternset refid="all.patternset"/>
+                </fileset>
+            </jar>
+        </sequential>
+    </macrodef>
+
+    <!-- module specific war -->
+    <macrodef name="module-war">
+        <attribute name="module" />
+        <attribute name="src" default="${src.base.dir}/${project.module.@{module}.src}"/>
+        <attribute name="build" default="${build.base.dir}/@{module}/web"/>
+        <attribute name="dist" default="${dist.base.dir}/${project.module.@{module}.distfile}"/>
+        <sequential>
+            <mkdir dir="@{build}" />
+            <mkdir dir="@{build}/WEB-INF" />
+            <mkdir dir="@{build}/WEB-INF/lib" />
+            <mkdir dir="${project.module.@{module}.WEB-INF}" />
+            <!-- copy files with filtering -->
+            <copy todir="@{build}/WEB-INF">
+                <filterset refid="build.filterset" />
+                <fileset dir="${project.module.@{module}.WEB-INF}" includes="${project.module.@{module}.WEB-INF.match}">
+                    <exclude name="**/*.jar"/>
+                </fileset>
+            </copy>
+            <copy todir="@{build}/WEB-INF">
+                <fileset dir="${project.module.@{module}.WEB-INF}" includes="${project.module.@{module}.WEB-INF.match}"/>
+            </copy>
+            <copy todir="@{build}/WEB-INF/lib">
+                <fileset dir="${dist.base.dir}" includes="${project.module.@{module}.require}"/>
+                <fileset dir="${lib.base.dir}"  includes="${project.module.@{module}.require}"/>
+            </copy>
+            <script language="beanshell">
+            <![CDATA[
+                import org.apache.tools.ant.*;
+                String jspFilter = project.getProperty("build.jsp.filter");
+                if ("true".equals(jspFilter)){
+                    Task task = project.createTask("war-jsp-filter");
+                    RuntimeConfigurable wrapper = task.getRuntimeConfigurableWrapper();
+                    wrapper.setAttribute("build", "@{build}");
+                    wrapper.setAttribute("src", "@{src}");
+                    task.perform();
+                }
+                String jsOptimize = project.getProperty("build.js.optimize");
+                if ("true".equals(jsOptimize)){
+                    Task task = project.createTask("war-js-optimize");
+                    RuntimeConfigurable wrapper = task.getRuntimeConfigurableWrapper();
+                    wrapper.setAttribute("build", "@{build}");
+                    wrapper.setAttribute("src", "@{src}");
+                    task.perform();
+                }
+            ]]>
+            </script>
+            <copy todir="@{build}">
+                <fileset dir="@{src}">
+                    <patternset refid="all.patternset"/>
+                    <exclude name="**/*.java"/>
+                </fileset>
+            </copy>
+            <jar jarfile="@{dist}">
+                <manifest>
+                    <attribute name="Build-Date" value="${BUILD_DATE}"/>
+                    <attribute name="Build-Env" value="${build.environment}"/>
+                    <attribute name="Build-User" value="${user.name}"/>
+                </manifest>
+                <fileset dir="@{build}" >
+                    <patternset refid="all.patternset"/>
+                </fileset>
+            </jar>
+            
+        </sequential>
+    </macrodef>
+
+    <macrodef name="war-jsp-filter">
+        <attribute name="src"/>
+        <attribute name="build"/>
+        <sequential>
+            <copy todir="@{build}">
+                <filterset refid="build.filterset" />
+                <fileset dir="@{src}">
+                    <include name="**/*.jsp"/>
+                </fileset>
+            </copy>
+        </sequential>
+    </macrodef>
+
+    <macrodef name="war-js-optimize">
+        <attribute name="src"/>
+        <attribute name="build"/>
+        <sequential>
+            <echo>Optimizing JavaScript files...</echo>
+            <copy todir="@{build}">
+                <filterchain>
+                    <filterreader classname="org.apache.tools.ant.filters.StripJavaComments"/>
+                    <tokenfilter>
+                        <deletecharacters chars="\t"/>
+                        <trim/>
+                        <ignoreblank/>
+                    </tokenfilter>
+                    <filterreader classname="org.apache.tools.ant.filters.StripLineBreaks"/>
+                </filterchain>
+                <fileset dir="@{src}">
+                    <include name="**/*.js"/>
+                </fileset>
+            </copy>
+        </sequential>
+    </macrodef>
+
+    <!-- module specific ejb -->
+    <macrodef name="module-ejb">
+        <attribute name="module" />
+        <attribute name="src" default="${build.base.dir}/@{module}/classes"/>
+        <attribute name="build" default="${build.base.dir}/@{module}/classes"/>
+        <attribute name="dist" default="${dist.base.dir}/${project.module.@{module}.distfile}"/>
+        <sequential>
+            <mkdir dir="@{src}"/>
+            <mkdir dir="@{build}"/>
+            <mkdir dir="@{build}/META-INF"/>
+            <mkdir dir="${project.module.@{module}.META-INF}"/>
+            <!-- copy resource files (xml, properties) with filtering if available-->
+            <copy todir="@{build}/META-INF">
+                <filterset refid="build.filterset" />
+                <fileset dir="${project.module.@{module}.META-INF}" includes="ejb-jar.xml ${project.module.@{module}.META-INF.match}"/>
+            </copy>
+            <copy todir="@{build}">
+                <filterset refid="build.filterset" />
+                <fileset dir="@{src}">
+                    <patternset refid="ejb.patternset"/>
+                </fileset>
+            </copy>
+            <jar jarfile="@{dist}">
+                <manifest>
+                    <attribute name="Build-Date" value="${BUILD_DATE}"/>
+                    <attribute name="Class-Path" value="${project.module.@{module}.manifest.classpath}"/>
+                </manifest>
+                <fileset dir="@{build}" >
+                    <patternset refid="all.patternset"/>
+                </fileset>
+            </jar>
+        </sequential>
+    </macrodef>
+
+    <!-- module specific ear -->
+    <macrodef name="module-ear">
+        <attribute name="module" />
+        <attribute name="src" default="${dist.base.dir}"/>
+        <attribute name="build" default="${build.base.dir}/@{module}/ear"/>
+        <attribute name="dist" default="${dist.base.dir}/${project.module.@{module}.distfile}"/>
+        <sequential>
+            <mkdir dir="@{src}"/>
+            <mkdir dir="@{build}"/>
+            <mkdir dir="@{build}/META-INF"/>
+            <mkdir dir="${project.module.@{module}.META-INF}"/>
+            <!-- copy war and ear files -->
+            <copy todir="@{build}">
+                <fileset dir="@{src}" includes="${project.module.@{module}.files}" />
+                <fileset dir="${lib.base.dir}" includes="${project.module.@{module}.files}" />
+            </copy>
+            <copy todir="@{build}/META-INF">
+                <filterset refid="build.filterset" />
+                <fileset dir="${project.module.@{module}.META-INF}" includes="application.xml ${project.module.@{module}.META-INF.match}" />
+            </copy>
+            <jar jarfile="@{dist}">
+                <manifest>
+                    <attribute name="Build-Date" value="${BUILD_DATE}"/>
+                </manifest>
+                <fileset dir="@{build}" >
+                    <patternset refid="all.patternset"/>
+                </fileset>
+            </jar>
+        </sequential>
+    </macrodef>
+
+    <!-- war module specific javac -->
+    <macrodef name="module-war-javac">
+        <attribute name="module" />
+        <sequential>
+            <module-javac module="@{module}"
+              src="${src.base.dir}/${project.module.@{module}.src}/WEB-INF/classes"
+              dest="${build.base.dir}/@{module}/web/WEB-INF/classes"
+            />
+        </sequential>
+    </macrodef>
+
+    <!-- war module specific javadoc -->
+    <macrodef name="module-war-javadoc">
+        <attribute name="module"/>
+        <sequential>
+            <module-javadoc
+              module="@{module}"
+              src="${src.base.dir}/${project.module.@{module}.src}/WEB-INF/classes"
+            />
+        </sequential>
+    </macrodef>
+    
+    <!-- deploy module to servlet deploy dir -->
+    <macrodef name="module-war-deploy">
+        <attribute name="module"/>
+        <sequential>
+            <copy todir="${servlet.deploy.dir}" file="${dist.base.dir}/${project.module.@{module}.distfile}"/>
+        </sequential>
+    </macrodef>
+    
+    <!-- deploy module to j2ee deploy dir -->
+    <macrodef name="module-ear-deploy">
+        <attribute name="module"/>
+        <sequential>
+            <copy todir="${j2ee.deploy.dir}" file="${dist.base.dir}/${project.module.@{module}.distfile}"/>
+<!--
+            <copy todir="${j2ee.common.lib.dir}">
+              <fileset dir="${dist.base.dir}" includes="${project.module.@{module}.require}"/>
+              <fileset dir="${lib.base.dir}"  includes="${project.module.@{module}.require}"/>
+            </copy>
+-->
+        </sequential>
+    </macrodef>
+    
+    <macrodef name="module-war-copy-tomcat">
+        <attribute name="module"/>
+        <attribute name="src" default="${build.base.dir}/@{module}/web" />
+        <attribute name="dest" default="${servlet.deploy.dir}" />
+        <sequential>
+            <script language="beanshell">
+            <![CDATA[
+                import org.apache.tools.ant.*;
+                String war = project.getProperty("project.module.@{module}.distfile");
+                war = war.substring(0, war.lastIndexOf("."));
+                project.setProperty("tmp.war", war);
+            ]]>
+            </script>
+            <copy todir="@{dest}/${tmp.war}/WEB-INF">
+                <filterset refid="build.filterset" />
+                <fileset dir="${project.module.@{module}.WEB-INF}" includes="web.xml ${project.module.@{module}.WEB-INF.match}"/>
+            </copy>
+            <copy todir="@{dest}/${tmp.war}/WEB-INF/lib">
+                <fileset dir="${dist.base.dir}" includes="${project.module.@{module}.require}"/>
+                <fileset dir="${lib.base.dir}"  includes="${project.module.@{module}.require}"/>
+            </copy>
+            <copy todir="@{dest}/${tmp.war}">
+                <fileset dir="@{src}">
+                    <patternset refid="all.patternset"/>
+                    <exclude name="**/*.java"/>
+                </fileset>
+            </copy>
+
+        </sequential>
+    </macrodef>
+
+    <!-- Orion Specific macrodefs -->
+    <macrodef name="module-ear-copy-orion">
+        <attribute name="module"/>
+        <sequential>
+            <module-task type="war" task="copy" subtask="orion" argument="@{module}"/>
+        </sequential>
+    </macrodef>
+    <macrodef name="module-war-copy-orion">
+        <attribute name="module"/>
+        <attribute name="argument" default=""/>
+        <attribute name="src" default="${src.base.dir}/${project.module.@{module}.src}"/>
+        <sequential>
+            <script language="beanshell">
+            <![CDATA[
+                import org.apache.tools.ant.*;
+
+                String ear = project.getProperty("project.module.@{argument}.distfile");
+                String war = project.getProperty("project.module.@{module}.distfile");
+
+                ear = ear.substring(0, ear.lastIndexOf("."));
+                war = war.substring(0, war.lastIndexOf("."));
+
+                Task task = project.createTask("orion war-copy");
+                RuntimeConfigurable wrapper = task.getRuntimeConfigurableWrapper();
+                wrapper.setAttribute("module", "@{module}");
+                wrapper.setAttribute("src", "${src.base.dir}/${project.module.@{module}.src}");
+                wrapper.setAttribute("dest", "${j2ee.deploy.dir}/"+ear+"/"+war);
+
+                try {
+                    task.perform();
+                }
+                catch (Exception e){
+                    task = project.createTask("fail");
+                    wrapper = task.getRuntimeConfigurableWrapper();
+                    wrapper.setAttribute("message", e.getMessage());
+                    task.perform();
+                }
+
+            ]]>
+            </script>
+
+        </sequential>
+    </macrodef>
+    <macrodef name="orion war-copy">
+        <attribute name="module"/>
+        <attribute name="src"/>
+        <attribute name="dest"/>
+        <sequential>
+            <copy todir="@{dest}/WEB-INF">
+                <filterset refid="build.filterset" />
+                <fileset dir="${project.module.@{module}.WEB-INF}" includes="web.xml ${project.module.@{module}.WEB-INF.match}"/>
+            </copy>
+            <copy todir="@{dest}/WEB-INF/lib">
+                <fileset dir="${dist.base.dir}" includes="${project.module.@{module}.require}"/>
+                <fileset dir="${lib.base.dir}" includes="${project.module.@{module}.require}"/>
+            </copy>
+            <copy todir="@{dest}">
+                <filterset refid="build.filterset" />
+                <fileset dir="@{src}">
+                    <patternset refid="all.patternset"/>
+                    <exclude name="**/*.java"/>
+                </fileset>
+            </copy>
+            <copy todir="@{dest}">
+                <fileset dir="@{src}">
+                    <patternset refid="all.patternset"/>
+                    <exclude name="**/*.java"/>
+                </fileset>
+            </copy>
+
+            <!-- replace ../ with ..\ for includes (orion/windows bug) shouldn't be needed anymore -->
+<!--
+            <echo>Replacing ../ with ..\ in @{dest}</echo>
+            <replace dir="@{dest}" value="..\" summary="true">
+                <include name="**/*.jsp"/>
+                <replacefilter token="../" />
+             </replace>
+-->
+        </sequential>
+    </macrodef>
+
+    <macrodef name="module-task">
+        <attribute name="type" />
+        <attribute name="task" />
+        <attribute name="subtask" default=""/>
+        <attribute name="argument" default=""/>
+        <sequential>
+            <script language="beanshell">
+            <![CDATA[
+                import org.apache.tools.ant.*;
+
+                try {
+                   int modules = Integer.valueOf(project.getProperty("project.internal.module.count"));
+                    for (int i=0; i < modules; i++){
+                        module = project.getProperty("project.internal.module."+i);
+                        type = project.getProperty("project.module."+module+".type");
+                        if ("@{type}".equalsIgnoreCase(type)){
+                            if (project.getProperty("project.internal.executed.@{type}-@{task}-"+module)==null){
+                                // attempt to create module specific task
+                                Task task = project.createTask(module+"-@{task}");
+                                if (task == null){ // if a module specific task doesn't exist load the generic one
+                                    task = project.createTask("module-@{type}-@{task}-@{subtask}");
+                                    if (task == null){
+                                        task = project.createTask("module-@{type}-@{task}");
+                                        if (task == null){
+                                            task = project.createTask("module-@{task}");
+                                        }
+                                    }
+                                    if (task != null){
+                                        RuntimeConfigurable wrapper = task.getRuntimeConfigurableWrapper();
+                                        wrapper.setAttribute("module", module);
+                                        if ("@{argument}".length()>0){
+                                            wrapper.setAttribute("argument", "@{argument}");
+                                        }
+                                    }
+                                }
+                                if (task != null) {
+                                    task.perform();
+                                    project.setProperty("project.internal.executed.@{type}-@{task}-"+module, "true");
+                                }
+                                else {
+                                    project.log("Unable to find target - @{type}-@{task}", Project.MSG_DEBUG);
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Throwable e){
+                    Task fail = project.createTask("fail");
+                    RuntimeConfigurable wrapper = fail.getRuntimeConfigurableWrapper();
+                    wrapper.setAttribute("message", e.getMessage());
+                    fail.perform();   
+                }   
+
+            ]]>
+            </script>
+        </sequential>
+    </macrodef>
+
+    <!--
+        ===========================================================================================
+        targets
+        ===========================================================================================
+    -->
+    <target name="usage">
+        <echo>
+usage:
+    ant [-Dmodule=%module%] [targets]
+
+        </echo>
+        <antcall target="modules" />
+    </target>
+
+    <target name="clean" description="Deletes all temporary build files">
+        <clean />
+    </target>
+    
+    <target name="prepare">
+        <module-task type="jar" task="prepare"/>
+        <module-task type="war" task="prepare"/>
+        <module-task type="ejb" task="prepare"/>
+        <resolve-internal/>
+    </target>
+
+    <target name="init" depends="prepare">
+        <parallel>
+            <mkdir dir="${build.base.dir}"/>
+            <mkdir dir="${docs.base.dir}"/>
+            <mkdir dir="${dist.base.dir}"/>
+            <mkdir dir="${etc.base.dir}"/>
+            <mkdir dir="${lib.base.dir}"/>
+            <mkdir dir="${meta.base.dir}"/>
+            <mkdir dir="${src.base.dir}"/>
+            <mkdir dir="${test.base.dir}"/>
+        </parallel>
+        <module-task type="jar" task="init"/>
+        <module-task type="war" task="init"/>
+        <module-task type="ejb" task="init"/>
+        <filterset id="build.filterset">
+            <filtersfile file="${build.resourcefile}"/>
+            <filter token="BUILD_TIMESTAMP" value="${BUILD_TIMESTAMP}"/>
+        </filterset>
+    </target>
+
+    <target name="javadoc" depends="init">
+        <module-task type="jar" task="javadoc"/>
+        <module-task type="war" task="javadoc"/>
+        <module-task type="ejb" task="javadoc"/>
+    </target>
+
+    <target name="compile" depends="init">
+        <module-task type="jar" task="javac"/>
+        <module-task type="war" task="javac"/>
+        <module-task type="ejb" task="javac"/>
+    </target>
+
+    <target name="jar" depends="compile">
+        <module-task type="jar" task="jar"/>
+    </target>
+
+    <target name="war" depends="jar">
+        <module-task type="war" task="war"/>
+    </target>
+
+    <target name="ejb" depends="jar">
+        <module-task type="ejb" task="ejb"/>
+    </target>
+    
+    <target name="ear" depends="war,ejb">
+        <module-task type="ear" task="ear"/>
+    </target>
+    
+    <target name="deploy" depends="deploy-war, deploy-ear"/>
+    
+    <target name="deploy-war" depends="war" if="build.deploy.war">
+        <module-task type="war" task="deploy"/>
+    </target>
+    
+    <target name="deploy-ear" depends="ear" if="build.deploy.ear">
+        <module-task type="ear" task="deploy"/>
+    </target>
+
+    <target name="copy">
+        <module-task type="war" task="copy" subtask="${servlet.server.name}"/>
+        <module-task type="ear" task="copy" subtask="${j2ee.server.name}"/>
+    </target>
+    
+    <target name="test" depends="jar,war">
+        <!-- Check that junit.jar is in $ANT_HOME/lib -->
+        <available classname="junit.framework.TestCase" property="junit.present"/>
+        <fail unless="junit.present" message="Please copy junit.jar into ${env.ANT_HOME}/lib or ~/.ant/lib"/>
+
+        <module-task type="jar" task="junit"/>
+        <module-task type="war" task="junit"/>
+        <fail if="build.test.failed" message="Tests failed. See summary above or reports generated in the ${docs.base.dir} directory."/>
+    </target>
+    
+    <target name="run" depends="jar">
+        <input 
+            addproperty="run.classname" 
+            defaultvalue="${project.run.classname}"
+            message="Classname:"
+            />
+        <java
+            classname="${run.classname}"
+            classpathref="run.classpath"
+            />
+    </target>
+
+    <target name="resolve">
+        <ivy:retrieve/>
+    </target>
+
+    <!-- wait for user input to continue -->
+    <target name="wait">
+        <input>Press the enter key to continue...</input>
+    </target>
+
+    <target name="modules">
+        <script language="beanshell">
+        <![CDATA[
+            import org.apache.tools.ant.*;
+            int modules = Integer.valueOf(project.getProperty("project.internal.module.count"));
+
+            print("Configured modules: "); print("\t");
+            for (int i=0; i < modules; i++){
+                module = project.getProperty("project.internal.module."+i);
+                type = project.getProperty("project.module."+module+".type");
+                desc = project.getProperty("project.module."+module+".description");
+                
+                print("    " +module+ "\t\t- " +(desc == null ? type : desc));
+            }
+        ]]>
+        </script>
+    </target>
+
+    <!-- import any project specific targets, tasks, or macrodefs -->
+ <!--
+    <dirname property="tmp.import.dir" file="${build.project.xml}" />
+    <import file="${tmp.import.dir}/${build.project.xml}" optional="true"/>
+-->    
+    <!-- setting up module properties -->
+    <script language="beanshell">
+    <![CDATA[
+        import org.apache.tools.ant.*;
+        import java.io.*;
+
+        // import build extensions
+        if (project.getProperty("build.ext.dir") != null){
+            String dirString = project.getProperty("build.ext.dir");
+            File extDir = new File(dirString);
+            if (!extDir.isDirectory()){
+                System.out.println("build.ext.dir specified ("+dirString+") is not a directory");
+            }
+            else {
+                ProjectHelper helper = (ProjectHelper) project.getReference("ant.projectHelper");
+                File[] exts = extDir.listFiles();
+                for (int i=0; i<exts.length; i++){
+                    ext = exts[i];
+                    if (!ext.isDirectory()){
+                        helper.parse(project, ext);
+                    }
+                }
+            }
+        }
+        // import project specific targets
+        if (project.getProperty("build.project.xml") != null){
+            File projectExt = new File(project.getProperty("build.project.xml"));
+            if (projectExt.exists()){
+                ProjectHelper helper = (ProjectHelper) project.getReference("ant.projectHelper");
+                helper.parse(project, projectExt);
+            }
+        }
+        
+        java.util.List modules = new java.util.ArrayList();
+        if (project.getProperty("module")==null){
+            Enumeration keys = project.getProperties().keys();
+            while (keys.hasMoreElements()){
+                String key = keys.nextElement();
+                if (key.startsWith("project.module.") && key.endsWith("type")){
+                       modules.add(key.substring(15, key.indexOf(".", 15)));
+                }
+            }
+        }
+        else {
+            if (project.getProperty("project.module." +project.getProperty("module")+ ".type") != null){
+                modules.add(project.getProperty("module"));
+            }
+            else {
+                project.setProperty("project.internal.invalidModule", "true");
+            }
+        }
+        if (modules.size() > 0){
+            Collections.sort(modules);
+            project.setProperty("project.internal.module.count", String.valueOf(modules.size()));
+            for (int i=0; i < modules.size(); i++){
+                String module = (String)modules.get(i);
+                project.setProperty("project.internal.module."+i, module);
+                // setup default src dir
+                if (project.getProperty("project.module."+module+".src") == null) {
+                    project.setProperty("project.module."+module+".src", module);
+                }
+                // setup default dist file names if none was given (modulename + type)
+                if (project.getProperty("project.module."+module+".distfile") == null) {
+                    // if type is ejb use module +"-ejb.jar" for dist name
+                    String prefix = module;
+                    if (project.getProperty("project.name")!=null){
+                        prefix=project.getProperty("project.name");
+                    }
+                    if (project.getProperty("project.module."+module+".type").equalsIgnoreCase("ejb")){
+                        project.setProperty("project.module."+module+".distfile", prefix+"-ejb.jar");
+                    }
+                    else {   
+                        project.setProperty("project.module."+module+".distfile", prefix+"."+project.getProperty("project.module."+module+".type"));
+                    }   
+                }
+                // if type is ear make sure we have a meta-inf dir
+                if (project.getProperty("project.module."+module+".type").equalsIgnoreCase("ear")){
+                    if (project.getProperty("project.module."+module+".META-INF") == null){
+                        project.setProperty("project.internal.message","EAR module ["+module+"] requires the project.module."+module+".META-INF property");
+                    }
+                    if (project.getProperty("project.module."+module+".META-INF.match") == null){
+                        project.setProperty("project.module."+module+".META-INF.match", "**/*");
+                    }
+                    if (project.getProperty("project.module."+module+".files") == null){
+                        project.setProperty("project.module."+module+".files", "*-ejb.jar *.war");
+                    }
+                }
+                else if (project.getProperty("project.module."+module+".type").equalsIgnoreCase("war")){
+                    if (project.getProperty("project.module."+module+".WEB-INF") == null){
+                        project.setProperty("project.module."+module+".WEB-INF", project.getProperty("src.base.dir")+"/"+project.getProperty("project.module."+module+".src")+"/WEB-INF");
+                    }
+                    if (project.getProperty("project.module."+module+".WEB-INF.match") == null){
+                        project.setProperty("project.module."+module+".WEB-INF.match", "**/*");
+                    }
+                    if (project.getProperty("project.module."+module+".require") == null){
+                        project.setProperty("project.module."+module+".require", "*.jar");
+                    }
+                }
+                else if (project.getProperty("project.module."+module+".type").equalsIgnoreCase("ejb")){
+                    if (project.getProperty("project.module."+module+".META-INF") == null){
+                        project.setProperty("project.module."+module+".META-INF", project.getProperty("etc.base.dir"));
+                    }
+                    if (project.getProperty("project.module."+module+".manifest.classpath") == null){
+                        project.setProperty("project.module."+module+".manifest.classpath", " ");
+                    }
+                }
+                else if (project.getProperty("project.module."+module+".require") == null){
+                    project.setProperty("project.module."+module+".require", "*.jar");
+                }
+            }
+        }
+    ]]>
+    </script>
+    
+    <!-- fail if come config message was thrown -->
+    <fail if="project.internal.message">
+
+ERROR: ${project.internal.message}
+
+Please correct project.properties</fail>
+    <!-- fail if a module was specified but the module doesn't exist (or is not configured) -->
+    <fail if="project.internal.invalidModule">
+
+ERROR: The module ${module} specified has not been configured in the project.properties</fail>
+    <!-- fail if no modules exist (or have been configured) -->
+    <fail unless="project.internal.module.count">
+
+ERROR: No Modules were configured in the project.properties
+-----------------------------------------------------------
+This build requires that atleast one project module configured in the project.properties file in the root of the project.
+
+Each module is made up of at minimum 1 property
+   project.module.[module-name].type=[the module type]
+   
+Valid module types by default are jar, war, ejb, ear.
+
+Usually at least 4 configuration variables
+   project.module.[module-name].type=[the module type]
+   project.module.[module-name].src=[the source directory in java]
+   project.module.[module-name].require.match=[some library files]
+   project.module.[module-name].distfile=[jarfile]
+
+WAR modules should have an additional property (defaults to project.module.[module-name].src/WEB-INF)
+   project.module.[module-name].WEB-INF=[the directory that represents the WEB-INF dir in the war]
+
+EAR modules require an additional property where the application.xml and like files exist
+   project.module.[module-name].META-INF=[the directory that represents the META-INF dir in the ear]
+</fail>
+
+</project>

@@ -1,0 +1,69 @@
+<project>
+
+    <target name="gen" depends="generate"/>
+    <target name="generate">
+		<property name="generate.force" value="true"/>
+		<module-task type="jar" task="generate"/>
+    </target>
+	<target name="hib-generate" if="xdoclet.present">
+	    <path id="xdoclet.classpath">
+	        <fileset dir="lib">
+	            <include name="commons-*.jar"/>
+	            <include name="generama-*.jar"/>
+	            <include name="jaxen-*.jar"/>
+	            <include name="dom4j-*.jar"/>
+	            <include name="nano*.jar"/>
+	            <include name="pico*.jar"/>
+	            <include name="qdox-*.jar"/>
+	            <include name="velocity-*.jar"/>
+	            <include name="xdoclet-*.jar"/>
+	        </fileset>
+	    </path>
+		<module-task type="jar" task="generate"/>
+	</target>
+
+    <!-- module specific generate -->
+    <macrodef name="module-generate">
+        <attribute name="module" />
+        <attribute name="src" default="${src.base.dir}/${project.module.@{module}.src}"/>
+        <attribute name="build" default="${build.base.dir}/@{module}/classes"/>
+        <sequential>
+		    <taskdef name="xdoclet" classname="org.xdoclet.ant.XDocletTask" classpathref="xdoclet.classpath" />
+            <mkdir dir="@{src}"/>
+            <mkdir dir="@{build}"/>
+            <xdoclet>
+                <!-- defines the file handled by xdoclet2 -->
+                <fileset dir="@{src}">
+                    <include name="**/model/*.java"/>
+                </fileset>
+                <!-- defines the processing of a plugin -->
+                <component classname="org.xdoclet.plugin.hibernate.HibernateMappingPlugin"
+                    destdir="@{build}"
+                    version="3.0"
+                    force="${generate.force}"
+                />
+            </xdoclet>
+        </sequential>
+    </macrodef>
+
+    <target name="compile">
+		<available classname="org.xdoclet.ant.XDocletTask" property="xdoclet.present">
+			<classpath>
+				<fileset dir="lib">
+					<include name="commons-*.jar"/>
+					<include name="generama-*.jar"/>
+					<include name="jaxen-*.jar"/>
+					<include name="dom4j-*.jar"/>
+					<include name="nano*.jar"/>
+					<include name="pico*.jar"/>
+					<include name="qdox-*.jar"/>
+					<include name="velocity-*.jar"/>
+					<include name="xdoclet-*.jar"/>
+				</fileset>
+			</classpath>
+		</available>
+        <target name="build.compile"/>
+        <target name="hib-generate" />
+    </target>
+    
+</project>

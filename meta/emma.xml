@@ -1,0 +1,57 @@
+<project>
+
+    <property name="emma.jar" value="lib/emma.jar"/>
+
+    <target name="coverage">
+    	<property name="build.classpath.add" value="${emma.jar}"/>
+    	<antcall target="emma"/>
+    </target>
+    <target name="emma">
+        <antcall target="compile"/>
+        <module-task type="jar" task="emma-instr"/>
+        <module-task type="jar" task="jar"/>
+        <module-task type="jar" task="junit"/>
+        <module-task type="jar" task="emma-report"/>
+    </target>
+
+    <!-- module specific generate -->
+    <macrodef name="module-jar-emma-instr">
+        <attribute name="module" />
+        <attribute name="src" default="${src.base.dir}/${project.module.@{module}.src}"/>
+        <attribute name="build" default="${build.base.dir}/@{module}/classes"/>
+        <sequential>
+            <java classname="emma">
+                <arg value="instr"/>
+                <arg value="-m"/>
+                <arg value="overwrite"/>
+                <arg value="-cp"/>
+                <arg value="@{build}"/>
+                <classpath>
+                    <pathelement location="${emma.jar}"/>
+                </classpath>
+            </java>
+       </sequential>
+    </macrodef>
+    <macrodef name="module-jar-emma-report">
+        <attribute name="module" />
+        <attribute name="src" default="${src.base.dir}/${project.module.@{module}.src}"/>
+        <attribute name="build" default="${build.base.dir}/@{module}/classes"/>
+        <sequential>
+            <java classname="emma">
+                <arg value="report"/>
+                <arg value="-r"/>
+                <arg value="html"/>
+                <arg value="-in"/>
+                <arg value="coverage.em"/>
+                <arg value="-in"/>
+                <arg value="coverage.ec"/>
+                <arg value="-sp"/>
+                <arg value="@{src}"/>
+                <classpath>
+                    <pathelement location="${emma.jar}"/>
+                </classpath>
+            </java>
+       </sequential>
+    </macrodef>
+
+</project>

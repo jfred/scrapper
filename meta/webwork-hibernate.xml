@@ -1,0 +1,1388 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project>
+
+    <property name="base.web.dir" value="${src.base.dir}/web"/>
+    <property name="base.source.dir" value="${src.base.dir}/java"/>
+    <property name="base.test.dir" value="${test.base.dir}/java"/>
+
+    <target name="gen-prepare">
+        <input message="Web Directory:" addproperty="base.web.dir"/>
+        <input message="Source Directory:" addproperty="base.source.dir"/>
+        <input message="Test Directory:" addproperty="base.test.dir"/>
+        <input message="Base Package:" addproperty="base.package"/>
+        <input message="Model Object:" addproperty="model.object"/>
+
+        <property name="model.object.plural" value="${model.object}s"/>
+        <script language="beanshell">
+        <![CDATA[
+            import org.apache.tools.ant.*;
+            project.setProperty("model.object.lowercase",project.getProperty("model.object").substring(0,1).toLowerCase()+project.getProperty("model.object").substring(1));
+            project.setProperty("model.object.alllowercase",project.getProperty("model.object").toLowerCase());
+            project.setProperty("model.object.plural.lowercase",project.getProperty("model.object.plural").substring(0,1).toLowerCase()+project.getProperty("model.object.plural").substring(1));
+]]>
+        </script>
+
+        <property name="dao.source.dir" value="${base.source.dir}"/>
+        <property name="dao.test.dir" value="${base.test.dir}"/>
+        <property name="hb8.source.dir" value="${base.source.dir}"/>
+        <property name="hb8.test.dir" value="${base.test.dir}"/>
+        <property name="ww.source.dir" value="${base.source.dir}"/>
+        <property name="ww.test.dir" value="${base.test.dir}"/>
+        <property name="mgr.source.dir" value="${base.source.dir}"/>
+        <property name="mgr.test.dir" value="${base.test.dir}"/>
+        <property name="util.source.dir" value="${base.source.dir}"/>
+        <property name="util.test.dir" value="${base.test.dir}"/>
+
+        <property name="model.package" value="${base.package}.model"/>
+        <property name="dao.package" value="${base.package}.dao"/>
+        <property name="hb8.package" value="${base.package}.dao.hibernate"/>
+        <property name="ww.package" value="${base.package}.action"/>
+        <property name="mgr.package" value="${base.package}.service"/>
+        <property name="util.package" value="${base.package}.util"/>
+
+        <script language="beanshell">
+        <![CDATA[
+            import org.apache.tools.ant.*;
+            project.setProperty("util.directory",project.getProperty("util.package").replace('.','/'));
+]]>
+        </script>
+        <available property="util.exists" file="${util.source.dir}/${util.directory}/XWorkValidationUtil.java" />
+        <available property="util.exists" file="${util.test.dir}/${util.directory}/AbstractTestCase.java" />
+    </target>
+
+    <target name="create-crud" depends="gen-prepare">
+        <available property="util.exists" file="${util.source.dir}/${util.directory}/XWorkValidationUtil.java" />
+        <antcall target="create-dao" inheritAll="true"/>
+        <antcall target="create-dao-testcase" inheritAll="true"/>
+        <antcall target="create-manager" inheritAll="true"/>
+
+        <!-- model generation -->
+        <antcall target="create-model" inheritAll="true"/>
+        <!-- hibernate dao generation -->
+        <antcall target="create-dao-hibernate" inheritAll="true"/>
+        <!-- webwork generation -->
+        <antcall target="create-action-webwork" inheritAll="true"/>
+        <antcall target="create-jsp-webwork" inheritAll="true"/>
+        <!-- util for spring/hibernate/webwork app -->
+        <antcall target="create-util" inheritAll="true"/>
+    </target>
+
+    <target name="create-model" depends="gen-prepare" unless="nomodel">
+        <script language="beanshell">
+        <![CDATA[
+            import org.apache.tools.ant.*;
+            project.setProperty("model.directory",project.getProperty("model.package").replace('.','/'));
+]]>
+        </script>
+        <mkdir dir="${base.source.dir}/${model.directory}"/>
+        <available property="model.exists" file="${base.source.dir}/${model.directory}/${model.object}.java" />
+        <fail if="model.exists">${base.source.dir}/${model.directory}/${model.object}.java already exists!</fail>
+        <echo file="${base.source.dir}/${model.directory}/${model.object}.java"><![CDATA[package ${model.package};
+
+public class ${model.object} {
+
+    private long id;
+
+// id (mutable)
+
+    /**
+     * Get the id.
+     *
+     * @return The id
+     */
+    public long getId() {
+        return id;
+    }
+
+    /**
+     * Set the id.
+     *
+     * @param id
+     */
+    public void setId(long id) {
+        this.id = id;
+    }
+
+}]]>
+        </echo>
+        <echo file="${base.source.dir}/${model.directory}/${model.object}-validation.xml"><![CDATA[<!DOCTYPE validators PUBLIC "-//OpenSymphony Group//XWork Validator 1.0//EN" "http://www.opensymphony.com/xwork/xwork-validator-1.0.2.dtd">
+<validators>
+</validators>
+]]>
+        </echo>
+        <echo file="${base.source.dir}/${model.directory}/${model.object.alllowercase}.hbm.xml"><![CDATA[<?xml version="1.0"?>
+<!DOCTYPE hibernate-mapping PUBLIC "-//Hibernate/Hibernate Mapping DTD//EN" "http://hibernate.sourceforge.net/hibernate-mapping-3.0.dtd">
+
+<hibernate-mapping>
+    <class name="${model.package}.${model.object}" table="${model.object.alllowercase}" mutable="true">
+        <id name="id" type="long" column="id" unsaved-value="0">
+            <generator class="native"/>
+        </id>
+        <!--<property name="name" column="name" type="string"/>-->
+    </class>
+</hibernate-mapping>
+]]>
+        </echo>
+    </target>
+
+    <target name="create-util" unless="util.exists" depends="gen-prepare">
+        <!-- setting up calculated properties -->
+        <script language="beanshell">
+        <![CDATA[
+            import org.apache.tools.ant.*;
+            project.setProperty("util.directory",project.getProperty("util.package").replace('.','/'));
+]]>
+        </script>
+        <mkdir dir="${util.source.dir}/${util.directory}"/>
+        <mkdir dir="${util.test.dir}/${util.directory}"/>
+        <available property="util.exists" file="${util.source.dir}/${util.directory}/XWorkValidationUtil.java" />
+        <fail if="util.exists">${util.source.dir}/${util.directory}/XWorkValidationUtil.java already exists!</fail>
+        <echo file="${util.source.dir}/${util.directory}/XWorkValidationUtil.java"><![CDATA[package ${util.package};
+
+import java.util.*;
+
+import com.opensymphony.xwork.*;
+import com.opensymphony.xwork.validator.*;
+import org.apache.commons.logging.*;
+
+public class XWorkValidationUtil {
+
+    private static final Log logger = LogFactory.getLog(XWorkValidationUtil.class);
+
+    public static ValidationAware validate(Object object) throws ValidationException {
+        return validate(object, Locale.getDefault());
+    }
+
+    public static ValidationAware validate(Object object, String context) throws ValidationException {
+        return validate(object, context, Locale.getDefault());
+    }
+
+    public static ValidationAware validate(Object object, final Locale locale) throws ValidationException {
+        return validate(object, null, locale);
+    }
+
+    public static ValidationAware validate(Object object, String context, final Locale locale) throws ValidationException {
+        if (logger.isDebugEnabled()) logger.debug("validate(" +object +", " +context+ ", " +locale+ ")");
+
+        ValidationAware validationAware = new ValidationAwareSupport();
+        LocaleProvider localeProvider = new LocaleProvider(){
+            public Locale getLocale() {
+                return locale;
+            }
+        };
+        TextProvider textProvider = DelegatingValidatorContext.makeTextProvider(object, localeProvider);
+        ValidatorContext validatorContext = new DelegatingValidatorContext(validationAware, textProvider, localeProvider);
+        ActionValidatorManager.validate(object, context, validatorContext);
+
+        if (validatorContext.hasActionErrors() || validatorContext.hasFieldErrors()){
+            throw new ValidationException("Validation failed for " +object.getClass()+".");
+        }
+
+        return validatorContext;
+    }
+}
+]]>
+        </echo>
+        <echo file="${util.test.dir}/${util.directory}/AbstractTestCase.java"><![CDATA[package ${util.package};
+
+import java.util.*;
+import java.io.*;
+
+import junit.framework.*;
+import org.springframework.context.support.*;
+import org.springframework.orm.hibernate3.*;
+import org.springframework.transaction.support.*;
+import org.springframework.transaction.*;
+import org.springframework.beans.factory.config.*;
+import org.apache.commons.logging.*;
+import org.hibernate.*;
+import com.opensymphony.xwork.validator.*;
+
+public abstract class AbstractTestCase extends TestCase {
+
+    private static final Log logger = LogFactory.getLog(AbstractTestCase.class);
+
+    private String sessionFactoryBeanName = "sessionFactory";
+    private String transactionManagerBeanName = "transactionManager";
+
+    protected static final FileSystemXmlApplicationContext applicationContext = new FileSystemXmlApplicationContext("${util.test.dir}/applicationContext.xml");
+    private boolean transaction = true;
+    private boolean autoRollback = true;
+
+    private TransactionStatus transactionStatus;
+
+// pretest setup
+
+    public void setUp() throws Exception {
+        super.setUp();
+        openSession();
+        if (transaction) {
+            startTransaction();
+        }
+        setupXworkValidators();
+    }
+
+    public void tearDown() throws Exception {
+        super.tearDown();
+        if (transaction) {
+            endTransaction();
+        }
+        closeSession();
+    }
+
+// helper methods
+
+    protected Object getBean(String beanName) {
+        return applicationContext.getBean(beanName);
+    }
+
+    protected Object getWiredInstance(Class clazz) {
+        return applicationContext.getBeanFactory().autowire(clazz, AutowireCapableBeanFactory.AUTOWIRE_BY_NAME, false);
+    }
+
+    protected boolean equals(Set set1, Set set2) {
+
+        if (set1 == null) {
+            return (set2 == null || set2.size() == 0);
+        }
+        if (set2 == null) {
+            return (set1 == null || set1.size() == 0);
+        }
+
+        Iterator iterator1 = set1.iterator();
+        while (iterator1.hasNext()) {
+            Object object1 = iterator1.next();
+            if (!(set2.contains(object1))) {
+                if (logger.isDebugEnabled()) logger.debug("equals: set 2 is missing an object from set 1");
+                return false;
+            }
+        }
+
+        Iterator iterator2 = set2.iterator();
+        while (iterator2.hasNext()) {
+            Object object2 = iterator2.next();
+            if (!(set1.contains(object2))) {
+                if (logger.isDebugEnabled()) logger.debug("equals: set 1 is missing an object from set 2");
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    protected boolean equals(byte[] bytes1, byte[] bytes2) {
+
+        if (bytes1.length != bytes2.length){
+            return false;
+        }
+
+        for (int i=0; i<bytes1.length; i++){
+            if (bytes1[i] != bytes2[i]){
+                if (logger.isDebugEnabled()) logger.debug("equals: Bytes at [" +i+ "] do not match");
+                return false;
+            }
+        }
+        return true;
+    }
+
+    protected void setupXworkValidators() throws Exception {
+        ValidatorFileParser.parseValidatorDefinitions(new FileInputStream("${etc.base.dir}/web/classes/validators.xml"));
+    }
+
+// session methods
+
+    protected void openSession() throws Exception {
+        SessionFactory sessionFactory = (SessionFactory) getBean(sessionFactoryBeanName);
+        Session s = sessionFactory.openSession();
+        TransactionSynchronizationManager.bindResource(sessionFactory, new SessionHolder(s));
+    }
+
+    protected void closeSession() throws Exception {
+        SessionFactory sessionFactory = (SessionFactory) getBean(sessionFactoryBeanName);
+        SessionHolder holder = (SessionHolder) TransactionSynchronizationManager.getResource(sessionFactory);
+        Session s = holder.getSession();
+        s.flush();
+        TransactionSynchronizationManager.unbindResource(sessionFactory);
+        SessionFactoryUtils.closeSessionIfNecessary(s, sessionFactory);
+    }
+
+    protected Session getSession() throws Exception {
+        SessionFactory sessionFactory = (SessionFactory) getBean(sessionFactoryBeanName);
+        SessionHolder holder = (SessionHolder) TransactionSynchronizationManager.getResource(sessionFactory);
+        return holder.getSession();
+    }
+
+// transaction methods
+
+    protected void setAutoRollback(boolean rollback){
+        this.autoRollback = rollback;
+    }
+
+    protected void setTransaction(boolean transaction){
+        this.transaction = transaction;
+    }
+
+    protected void startTransaction() throws Exception {
+        PlatformTransactionManager transactionManager = (PlatformTransactionManager) getBean(transactionManagerBeanName);
+        transactionStatus = transactionManager.getTransaction(new DefaultTransactionDefinition(TransactionDefinition.PROPAGATION_REQUIRED));
+    }
+
+    protected void endTransaction() throws Exception {
+        if (autoRollback){
+            rollbackTransaction();
+        }
+        else {
+            commitTransaction();
+        }
+    }
+
+    protected void commitTransaction(){
+        PlatformTransactionManager transactionManager = (PlatformTransactionManager) getBean(transactionManagerBeanName);
+        transactionManager.commit(transactionStatus);
+    }
+
+    protected void rollbackTransaction(){
+        PlatformTransactionManager transactionManager = (PlatformTransactionManager) getBean(transactionManagerBeanName);
+        transactionManager.rollback(transactionStatus);
+    }
+}
+]]>
+        </echo>
+        <echo file="${util.test.dir}/applicationContext.xml"><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE beans PUBLIC "-//SPRING//DTD BEAN//EN" "http://www.springframework.org/dtd/spring-beans.dtd">
+<beans>
+
+    <import resource="../../${etc.base.dir}/web/applicationContext-hibernate.xml" />
+    <import resource="../../${etc.base.dir}/web/applicationContext-bean.xml" />
+
+    <bean id="placeholderConfig" class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+      <property name="location"><value>${etc.base.dir}/env/test.properties</value></property>
+    </bean>
+
+    <bean id="dataSource" class="org.springframework.jdbc.datasource.DriverManagerDataSource">
+        <property name="driverClassName">
+            <value>$${database.driver}</value>
+        </property>
+        <property name="url">
+            <value>$${database.url}</value>
+        </property>
+        <property name="username">
+            <value>$${database.username}</value>
+        </property>
+        <property name="password">
+            <value>$${database.password}</value>
+        </property>
+    </bean>
+
+</beans>
+]]>
+        </echo>
+    </target>
+
+    <target name="create-dao" depends="gen-prepare">
+        <!-- setting up calculated properties -->
+        <script language="beanshell">
+        <![CDATA[
+            import org.apache.tools.ant.*;
+            project.setProperty("dao.directory",project.getProperty("dao.package").replace('.','/'));
+]]>
+        </script>
+        <mkdir dir="${dao.source.dir}/${dao.directory}"/>
+        <available property="dao.exists" file="${dao.source.dir}/${dao.directory}/${model.object}Dao.java" />
+        <fail if="dao.exists">${dao.source.dir}/${dao.directory}/${model.object}Dao.java already exists!</fail>
+        <echo file="${dao.source.dir}/${dao.directory}/${model.object}Dao.java"><![CDATA[package ${dao.package};
+
+import java.util.*;
+
+import ${model.package}.${model.object};
+
+/**
+ * ${model.object}Dao
+ */
+public interface ${model.object}Dao {
+
+    /**
+     * Get all ${model.object.plural.lowercase}
+     *
+     * @return The list of ${model.object.plural.lowercase}
+     *
+     * @throws Exception If an error occurs retrieving the data
+     */
+    public List get${model.object.plural}() throws Exception;
+
+    /**
+     * Get the ${model.object.lowercase} with the specified id
+     *
+     * @param id the ${model.object.lowercase} id
+     *
+     * @return The ${model.object.lowercase}
+     *
+     * @throws Exception If an error occurs retrieving the data
+     */
+    public ${model.object} get${model.object}(long id) throws Exception;
+
+    /**
+     * Save the ${model.object.lowercase}
+     *
+     * @param ${model.object.lowercase} the ${model.object.lowercase}
+     *
+     * @return The ${model.object.lowercase}
+     *
+     * @throws Exception If an error occurs saving the data
+     */
+    public ${model.object} save${model.object}(${model.object} ${model.object.lowercase}) throws Exception;
+
+    /**
+     * Delete the ${model.object.lowercase} with the specified id
+     *
+     * @param id the ${model.object.lowercase} id
+     *
+     * @throws Exception If an error occurs deleting the data
+     */
+    public void delete${model.object}(long id) throws Exception;
+}
+]]>
+        </echo>
+    </target>
+
+    <target name="create-dao-testcase" depends="gen-prepare">
+        <!-- setting up calculated properties -->
+        <script language="beanshell">
+        <![CDATA[
+            import org.apache.tools.ant.*;
+            project.setProperty("dao.directory",project.getProperty("dao.package").replace('.','/'));
+            project.setProperty("model.object.lowercase",project.getProperty("model.object").substring(0,1).toLowerCase()+project.getProperty("model.object").substring(1));
+]]>
+        </script>
+        <mkdir dir="${dao.test.dir}/${dao.directory}"/>
+        <available property="dao.exists" file="${dao.test.dir}/${dao.directory}/${model.object}DaoTestCase.java" />
+        <fail if="dao.exists">${dao.source.dir}/${dao.directory}/${model.object}DaoTestCase.java already exists!</fail>
+        <echo file="${dao.test.dir}/${dao.directory}/${model.object}DaoTestCase.java"><![CDATA[package ${dao.package};
+
+import ${model.package}.*;
+import ${util.package}.*;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
+import com.opensymphony.xwork.validator.*;
+
+/**
+ * ${model.object}DaoTestCase
+ */
+public class ${model.object}DaoTestCase extends AbstractTestCase {
+
+    private static final Log logger = LogFactory.getLog(${model.object}DaoTestCase.class);
+
+// ioc variables
+    private ${model.object}Dao ${model.object.lowercase}Dao;
+
+// tests
+    public void testValidate${model.object}() throws Exception{
+        if (logger.isDebugEnabled()) logger.debug("testSaveInvalid${model.object}()");
+        ${model.object} ${model.object.lowercase} = getInvalid${model.object}();
+        try {
+            XWorkValidationUtil.validate(${model.object.lowercase});
+            assertFalse("Validation should have failed", true);
+        }
+        catch (ValidationException e) { /* validation should fail */ }
+
+        ${model.object.lowercase} = getValid${model.object}();
+        try {
+            XWorkValidationUtil.validate(${model.object.lowercase});
+        }
+        catch (ValidationException e) {
+            assertFalse("Validation failed",true);
+        }
+    }
+
+
+    public void testGet${model.object.plural}() throws Exception{
+        if (logger.isDebugEnabled()) logger.debug("testGet${model.object.plural}()");
+        assertNotNull(get${model.object}Dao().get${model.object.plural}());
+    }
+
+    public void testSave${model.object}() throws Exception{
+        if (logger.isDebugEnabled()) logger.debug("testSave${model.object}()");
+        ${model.object} ${model.object.lowercase} = getValid${model.object}();
+        get${model.object}Dao().save${model.object}(${model.object.lowercase});
+    }
+
+    public void testSaveInvalid${model.object}() throws Exception{
+        if (logger.isDebugEnabled()) logger.debug("testSaveInvalid${model.object}()");
+        ${model.object} ${model.object.lowercase} = getInvalid${model.object}();
+        try {
+            get${model.object}Dao().save${model.object}(${model.object.lowercase});
+            assertFalse("Invalid ${model.object} was saved", true);
+        } catch (Exception e){ /* should thow exception */}
+    }
+
+    private ${model.object}Dao get${model.object}Dao(){
+        if (${model.object.lowercase}Dao == null){
+            ${model.object.lowercase}Dao = (${model.object}Dao) getBean("${model.object.lowercase}Dao");
+        }
+        return ${model.object.lowercase}Dao;
+    }
+
+// helper methods
+    private ${model.object} getValid${model.object}(){
+        if (logger.isDebugEnabled()) logger.debug("getValid${model.object}()");
+        ${model.object} ${model.object.lowercase} = new ${model.object}();
+        return ${model.object.lowercase};
+    }
+
+    private ${model.object} getInvalid${model.object}(){
+        if (logger.isDebugEnabled()) logger.debug("getInvalid${model.object}()");
+        ${model.object} ${model.object.lowercase} = new ${model.object}();
+        return ${model.object.lowercase};
+    }
+
+}
+]]>
+        </echo>
+    </target>
+
+    <target name="create-dao-hibernate" depends="gen-prepare" >
+        <!-- setting up calculated properties -->
+        <script language="beanshell">
+        <![CDATA[
+            import org.apache.tools.ant.*;
+            project.setProperty("hb8.directory",project.getProperty("hb8.package").replace('.','/'));
+]]>
+        </script>
+        <mkdir dir="${hb8.source.dir}/${hb8.directory}"/>
+        <available property="hb8.exists" file="${hb8.source.dir}/${hb8.directory}/Hibernate${model.object}Dao.java" />
+        <fail if="hb8.exists">${hb8.source.dir}/${hb8.directory}/Hibernate${model.object}Dao.java already exists!</fail>
+        <echo  file="${hb8.source.dir}/${hb8.directory}/Hibernate${model.object}Dao.java">package ${hb8.package};
+
+import java.util.*;
+
+import ${dao.package}.*;
+import ${model.package}.*;
+import ${util.package}.*;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.springframework.orm.hibernate3.support.*;
+import org.springframework.orm.*;
+
+/**
+ * Hibernate${model.object}Dao
+ */
+public class Hibernate${model.object}Dao extends HibernateDaoSupport implements ${model.object}Dao {
+
+    private static final Log logger = LogFactory.getLog(Hibernate${model.object}Dao.class);
+
+    public List get${model.object.plural}() throws Exception {
+        if (logger.isDebugEnabled()) logger.debug("get${model.object.plural}()");
+        return getHibernateTemplate().find("from ${model.object}");
+    }
+
+    public ${model.object} get${model.object}(long id) throws Exception {
+        if (logger.isDebugEnabled()) logger.debug("get${model.object}(" +id+ ")");
+        Long objectId = new Long(id);
+        ${model.object} ${model.object.lowercase} = (${model.object}) getHibernateTemplate().get(${model.object}.class, objectId);
+        if (${model.object.lowercase} == null){
+            throw new ObjectRetrievalFailureException(${model.object}.class, objectId);
+        }
+        return ${model.object.lowercase};
+    }
+
+    public ${model.object} save${model.object}(${model.object} ${model.object.lowercase}) throws Exception {
+        if (logger.isDebugEnabled()) logger.debug("save${model.object}(" +${model.object.lowercase}+ ")");
+        XWorkValidationUtil.validate(${model.object.lowercase});
+        ${model.object} mergedObject = (${model.object}) getHibernateTemplate().merge(${model.object.lowercase});
+        getHibernateTemplate().saveOrUpdate(mergedObject);
+        getHibernateTemplate().flush();
+        getHibernateTemplate().refresh(mergedObject);
+        return mergedObject;
+    }
+
+    public void delete${model.object}(long id) throws Exception {
+        if (logger.isDebugEnabled()) logger.debug("delete${model.object}(" +id+ ")");
+        getHibernateTemplate().delete(get${model.object}(id));
+    }
+
+}
+        </echo>
+    </target>
+
+    <target name="create-manager" depends="gen-prepare">
+        <!-- setting up calculated properties -->
+        <script language="beanshell">
+        <![CDATA[
+            import org.apache.tools.ant.*;
+            project.setProperty("mgr.directory",project.getProperty("mgr.package").replace('.','/'));
+]]>
+        </script>
+        <mkdir dir="${mgr.source.dir}/${mgr.directory}"/>
+        <available property="mgr.exists" file="${mgr.source.dir}/${mgr.directory}/${model.object}Manager.java" />
+        <fail if="mgr.exists">${mgr.source.dir}/${mgr.directory}/${model.object}.java already exists!</fail>
+        <available property="mgr.exists" file="${mgr.source.dir}/${mgr.directory}/${model.object}ManagerImpl.java" />
+        <fail if="mgr.exists">${mgr.source.dir}/${mgr.directory}/${model.object}Impl.java already exists!</fail>
+        <echo  file="${mgr.source.dir}/${mgr.directory}/${model.object}Manager.java"><![CDATA[package ${mgr.package};
+
+import java.util.*;
+
+import ${model.package}.${model.object};
+
+public interface ${model.object}Manager {
+
+    /**
+     * Get all ${model.object.plural.lowercase}
+     *
+     * @return The list of ${model.object.plural.lowercase}
+     *
+     * @throws Exception If an error occurs retrieving the data
+     */
+    public List get${model.object.plural}() throws Exception;
+
+    /**
+     * Get the ${model.object.lowercase} with the specified id
+     *
+     * @param id the ${model.object.lowercase} id
+     *
+     * @return The ${model.object.lowercase}
+     *
+     * @throws Exception If an error occurs retrieving the data
+     */
+    public ${model.object} get${model.object}(long id) throws Exception;
+
+    /**
+     * Save the ${model.object.lowercase}
+     *
+     * @param ${model.object.lowercase} the ${model.object.lowercase}
+     *
+     * @return The ${model.object.lowercase}
+     *
+     * @throws Exception If an error occurs saving the data
+     */
+    public ${model.object} save${model.object}(${model.object} ${model.object.lowercase}) throws Exception;
+
+    /**
+     * Delete the ${model.object.lowercase} with the specified id
+     *
+     * @param id the ${model.object.lowercase} id
+     *
+     * @throws Exception If an error occurs deleting the data
+     */
+    public void delete${model.object}(long id) throws Exception;
+
+}]]>
+        </echo>
+        <echo  file="${mgr.source.dir}/${mgr.directory}/${model.object}ManagerImpl.java"><![CDATA[package ${mgr.package};
+
+import java.util.*;
+
+import ${dao.package}.*;
+import ${model.package}.*;
+
+public class ${model.object}ManagerImpl implements ${model.object}Manager {
+
+    private ${model.object}Dao ${model.object.lowercase}Dao;
+
+    public void set${model.object}Dao(${model.object}Dao new${model.object}Dao){
+        ${model.object.lowercase}Dao = new${model.object}Dao;
+    }
+
+    public List get${model.object.plural}() throws Exception {
+        return ${model.object.lowercase}Dao.get${model.object.plural}();
+    }
+
+    public ${model.object} get${model.object}(long id) throws Exception {
+        return ${model.object.lowercase}Dao.get${model.object}(id);
+    }
+
+    public ${model.object} save${model.object}(${model.object} ${model.object.lowercase}) throws Exception {
+        return ${model.object.lowercase}Dao.save${model.object}(${model.object.lowercase});
+    }
+
+    public void delete${model.object}(long id) throws Exception {
+        ${model.object.lowercase}Dao.delete${model.object}(id);
+    }
+}]]>
+        </echo>
+    </target>
+
+    <target name="create-action-webwork" depends="gen-prepare">
+        <!-- setting up calculated properties -->
+        <script language="beanshell">
+        <![CDATA[
+            import org.apache.tools.ant.*;
+            project.setProperty("ww.directory",project.getProperty("ww.package").replace('.','/'));
+]]>
+        </script>
+        <mkdir dir="${ww.source.dir}/${ww.directory}"/>
+        <available property="ww.exists" file="${ww.source.dir}/${ww.directory}/${model.object}Action.java" />
+        <fail if="ww.exists">${ww.source.dir}/${hb8.directory}/${model.object}Action.java already exists!</fail>
+        <echo file="${ww.source.dir}/${ww.directory}/${model.object}Action.java"><![CDATA[package ${ww.package};
+
+import java.util.*;
+
+import ${mgr.package}.*;
+import ${model.package}.*;
+
+import com.opensymphony.xwork.*;
+import org.apache.commons.logging.*;
+
+public class ${model.object}Action extends ActionSupport {
+
+    private static final Log logger = LogFactory.getLog(${model.object}Action.class);
+
+// ioc attributes
+    private ${model.object}Manager ${model.object.lowercase}Manager;
+
+// dynamic form elements
+    private List ${model.object.plural.lowercase};
+
+// attributes
+	private long id;
+
+    private ${model.object} ${model.object.lowercase};
+
+// ioc methods
+    /**
+     * Set the ${model.object.lowercase}Manager.
+     *
+     * @param ${model.object.lowercase}Manager
+     */
+    public void set${model.object}Manager(${model.object}Manager ${model.object.lowercase}Manager) {
+        if (logger.isDebugEnabled()) logger.debug("set${model.object}Manager(" +${model.object.lowercase}Manager+ ")");
+        this.${model.object.lowercase}Manager = ${model.object.lowercase}Manager;
+    }
+
+// dynamic form elements
+// ${model.object.plural.lowercase} (immutable)
+
+    /**
+     * Get the ${model.object.plural.lowercase}.
+     *
+     * @return The ${model.object.plural.lowercase}
+     */
+    public List get${model.object.plural}() {
+        if (logger.isDebugEnabled()) logger.debug("get${model.object.plural}()");
+        return ${model.object.plural.lowercase};
+    }
+
+// attributes
+// id (mutable)
+
+    /**
+     * Get the id.
+     *
+     * @return The id
+     */
+    public long getId() {
+        return id;
+    }
+
+    /**
+     * Set the id.
+     *
+     * @param id
+     */
+    public void setId(long id) {
+        this.id = id;
+    }
+
+// ${model.object.lowercase} (mutable)
+
+    /**
+     * Get the ${model.object.lowercase}.
+     *
+     * @return The ${model.object.lowercase}
+     */
+    public ${model.object} get${model.object}() {
+        if (logger.isDebugEnabled()) logger.debug("get${model.object}()");
+        return ${model.object.lowercase};
+    }
+
+    /**
+     * Set the ${model.object.lowercase}.
+     *
+     * @param ${model.object.lowercase}
+     */
+    public void set${model.object}(${model.object} ${model.object.lowercase}) {
+        if (logger.isDebugEnabled()) logger.debug("set${model.object}(" +${model.object.lowercase}+ ")");
+        this.${model.object.lowercase} = ${model.object.lowercase};
+    }
+
+// execute methods
+    public String list() throws Exception {
+        if (logger.isDebugEnabled()) logger.debug("list()");
+        ${model.object.plural.lowercase} = ${model.object.lowercase}Manager.get${model.object.plural}();
+        return SUCCESS;
+    }
+
+    public String view() throws Exception {
+        if (logger.isDebugEnabled()) logger.debug("view()");
+        ${model.object.lowercase} = ${model.object.lowercase}Manager.get${model.object}(id);
+        return SUCCESS;
+    }
+
+    public String save() throws Exception {
+        if (logger.isDebugEnabled()) logger.debug("save()");
+        ${model.object.lowercase} = ${model.object.lowercase}Manager.save${model.object}(${model.object.lowercase});
+        return SUCCESS;
+    }
+
+// helper methods
+
+}
+]]>
+	    </echo>
+        <echo file="${ww.source.dir}/${ww.directory}/${model.object}Action-edit-validation.xml"><![CDATA[<!DOCTYPE validators PUBLIC "-//OpenSymphony Group//XWork Validator 1.0//EN" "http://www.opensymphony.com/xwork/xwork-validator-1.0.2.dtd">
+<validators>
+    <field name="id">
+        <field-validator type="fieldexpression">
+            <param name="expression">
+                id > 0
+            </param>
+            <message key="${model.object.alllowercase}.id.invalid">Missing Message: ${model.object.alllowercase}.id.invalid</message>
+        </field-validator>
+    </field>
+</validators>
+]]>
+        </echo>
+        <echo file="${ww.source.dir}/${ww.directory}/${model.object}Action-save-validation.xml"><![CDATA[<!DOCTYPE validators PUBLIC "-//OpenSymphony Group//XWork Validator 1.0//EN" "http://www.opensymphony.com/xwork/xwork-validator-1.0.2.dtd">
+<validators>
+    <field name="${model.object.lowercase}">
+        <field-validator type="visitor">
+            <message/>
+        </field-validator>
+    </field>
+</validators>
+]]>
+	    </echo>
+	</target>
+
+    <target name="create-jsp-webwork" depends="gen-prepare">
+        <!-- setting up calculated properties -->
+        <script language="beanshell">
+        <![CDATA[
+            import org.apache.tools.ant.*;
+            project.setProperty("ww.directory",project.getProperty("ww.package").replace('.','/'));
+]]>
+        </script>
+        <available property="jsp.exists" file="${base.web.dir}/${model.object.lowercase}" />
+        <fail if="ww.exists">${base.web.dir}/${model.object.lowercase} already exists!</fail>
+        <mkdir dir="${base.web.dir}/${model.object.lowercase}"/>
+
+        <echo file="${base.web.dir}/${model.object.lowercase}/edit.jsp"><![CDATA[<%@ taglib prefix="ww" uri="webwork" %>
+<html>
+<head>
+    <ww:if test="project != null && project.id > 0"><title>Edit ${model.object}</title></ww:if>
+    <ww:else><title>Add ${model.object}</title></ww:else>
+</head>
+<body>
+    <form method="post" action="<ww:url value="'/${model.object.lowercase}/save.jspa'"/>">
+        <ww:hidden name="'${model.object.lowercase}.id'" value="${model.object.lowercase}.id"/>
+        <table class="form">
+<!--
+            <tr>
+                <td><ww:label value="'Name'"/></td>
+                <td><ww:textfield name="'${model.object.lowercase}.name'" value="${model.object.lowercase}.name"/></td>
+            </tr>
+-->
+            <tr>
+                <td>&nbsp;</td>
+                <td><ww:submit value="'Save'"/></td>
+            </tr>
+        </table>
+    </form>
+</body>
+</html>
+]]>
+        </echo>
+        <echo file="${base.web.dir}/${model.object.lowercase}/list.jsp"><![CDATA[<%@ taglib prefix="ww" uri="webwork" %>
+<html>
+<head><title>List ${model.object.plural}</title></head>
+<body>
+
+<a href="<ww:url value="'/${model.object.lowercase}/add.jspa'"/>">add ${model.object.lowercase}</a>
+
+<table class="list">
+    <tr>
+        <th>ID</th>
+        <th>${model.object}</th>
+    </tr>
+    <ww:iterator value="${model.object.plural.lowercase}">
+        <tr>
+            <td><ww:property value="id"/></td>
+            <td><a href="<ww:url value="'/${model.object.lowercase}/edit.jspa?id='+id"/>"><ww:property value="top"/></a></td>
+        </tr>
+    </ww:iterator>
+</table>
+
+</body>
+</html>]]></echo>
+	</target>
+
+    <macrodef name="module-war-create-base">
+        <attribute name="module"/>
+        <sequential>
+            <available property="webinf.exists" file="${project.module.@{module}.WEB-INF}" />
+            <fail if="webinf.exists">
+
+ERROR: ${project.module.@{module}.WEB-INF} already exists!
+
+Did you mean to run this for a specific module with -Dmodule=[some module]
+
+</fail>
+            <mkdir dir="${project.module.@{module}.WEB-INF}/classes"/>
+
+            <echo file="${project.module.@{module}.WEB-INF}/applicationContext.xml"><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE beans PUBLIC "-//SPRING//DTD BEAN//EN" "http://www.springframework.org/dtd/spring-beans.dtd">
+<beans>
+    <import resource="applicationContext-database.xml" />
+    <import resource="applicationContext-hibernate.xml" />
+    <import resource="applicationContext-bean.xml" />
+</beans>
+]]>
+            </echo>
+            <echo file="${project.module.@{module}.WEB-INF}/applicationContext-bean.xml"><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE beans PUBLIC "-//SPRING//DTD BEAN//EN" "http://www.springframework.org/dtd/spring-beans.dtd">
+<beans>
+    <!-- dao -->
+<!--
+	<bean id="someDao" class="package.HibernateSomeDao">
+        <property name="sessionFactory"><ref bean="sessionFactory"/></property>
+    </bean>
+-->
+	<!-- manager -->
+<!--
+    <bean id="someManager" class="package.SomeManagerImpl" singleton="true">
+        <property name="someDao"><ref local="someDao"/></property>
+    </bean>
+-->
+    <!-- One BeanNameAutoProxyCreator handles all beans where we want all methods to use PROPAGATION_REQUIRED -->
+    <bean id="autoProxyCreator" class="org.springframework.aop.framework.autoproxy.BeanNameAutoProxyCreator">
+        <property name="interceptorNames">
+            <list>
+                <idref bean="matchAllTxInterceptor"/>
+            </list>
+        </property>
+        <property name="beanNames">
+            <list>
+                <!--<value>someManager</value>-->
+			</list>
+        </property>
+    </bean>
+</beans>]]>
+            </echo>
+            <echo file="${project.module.@{module}.WEB-INF}/applicationContext-database.xml"><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE beans PUBLIC "-//SPRING//DTD BEAN//EN" "http://www.springframework.org/dtd/spring-beans.dtd">
+<beans>
+    <!-- datasource -->
+    <bean id="dataSource" class="org.springframework.jndi.JndiObjectFactoryBean">
+        <property name="jndiName"><value>java:comp/env/jdbc/${project.name}DS</value></property>
+    </bean>
+</beans>
+]]>
+            </echo>
+            <echo file="${project.module.@{module}.WEB-INF}/applicationContext-hibernate.xml"><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE beans PUBLIC "-//SPRING//DTD BEAN//EN" "http://www.springframework.org/dtd/spring-beans.dtd">
+
+<beans>
+    <!-- session factory -->
+    <bean id="sessionFactory" class="org.springframework.orm.hibernate3.LocalSessionFactoryBean">
+        <property name="dataSource"><ref bean="dataSource"/></property>
+        <property name="mappingResources">
+            <list>
+                <!--<value>some.hbm.xml</value>-->
+			</list>
+        </property>
+        <property name="hibernateProperties">
+            <props>
+                <prop key="hibernate.dialect">org.hibernate.dialect.HSQLDialect</prop>
+                <!--<prop key="hibernate.dialect">org.hibernate.dialect.OracleDialect</prop>-->
+                <prop key="hibernate.cache.provider_class">org.hibernate.cache.EhCacheProvider</prop>
+                <prop key="hibernate.cglib.use_reflection_optimizer">true</prop>
+                <prop key="hibernate.jdbc.batch_size">0</prop>
+                <prop key="hibernate.jdbc.use_streams_for_binary">true</prop>
+                <!--<prop key="hibernate.hbm2ddl.auto">create</prop>-->
+            </props>
+        </property>
+    </bean>
+
+    <!-- transactionManager     -->
+    <bean id="transactionManager" class="org.springframework.orm.hibernate3.HibernateTransactionManager">
+        <property name="sessionFactory"><ref local="sessionFactory"/></property>
+    </bean>
+    <!-- Transaction Interceptor set up to do PROPAGATION_REQUIRED on all methods -->
+    <bean id="matchAllWithPropReq" class="org.springframework.transaction.interceptor.MatchAlwaysTransactionAttributeSource">
+        <property name="transactionAttribute"><value>PROPAGATION_REQUIRED</value></property>
+    </bean>
+    <bean id="matchAllTxInterceptor" class="org.springframework.transaction.interceptor.TransactionInterceptor">
+        <property name="transactionManager"><ref bean="transactionManager"/></property>
+        <property name="transactionAttributeSource"><ref bean="matchAllWithPropReq"/></property>
+    </bean>
+
+</beans>]]>
+            </echo>
+
+            <echo file="${project.module.@{module}.WEB-INF}/decorators.xml"><![CDATA[<decorators defaultdir="/decorators">
+    <excludes>
+        <pattern>/styles/*</pattern>
+        <pattern>/js/*</pattern>
+        <pattern>/images/*</pattern>
+        <pattern>/static/*</pattern>
+        <pattern>/plain/*</pattern>
+        <pattern>/rpc/*</pattern>
+        <pattern>/index.jsp</pattern>
+    </excludes>
+    <decorator name="main" page="main.jsp">
+        <pattern>/*</pattern>
+    </decorator>
+</decorators>
+]]>
+            </echo>
+            <echo file="${project.module.@{module}.WEB-INF}/sitemesh.xml"><![CDATA[<sitemesh>
+    <property name="decorators-file" value="/WEB-INF/decorators.xml" />
+    <excludes file="${decorators-file}" />
+
+    <page-parsers>
+        <parser content-type="text/html" class="com.opensymphony.module.sitemesh.parser.FastPageParser" />
+        <parser content-type="text/html;charset=ISO-8859-1" class="com.opensymphony.module.sitemesh.parser.FastPageParser" />
+    </page-parsers>
+
+    <decorator-mappers>
+        <mapper class="com.opensymphony.module.sitemesh.mapper.ConfigDecoratorMapper">
+            <param name="config" value="${decorators-file}" />
+        </mapper>
+    </decorator-mappers>
+</sitemesh>
+]]>
+            </echo>
+
+            <echo file="${project.module.@{module}.WEB-INF}/web.xml"><![CDATA[<?xml version="1.0"?>
+<!DOCTYPE web-app PUBLIC "-//Sun Microsystems, Inc.//DTD Web Application 2.3//EN" "http://java.sun.com/dtd/web-app_2_3.dtd">
+
+<web-app>
+	<display-name>${project.name}</display-name>
+
+    <filter>
+        <filter-name>hibernateFilter</filter-name>
+        <filter-class>org.springframework.orm.hibernate3.support.OpenSessionInViewFilter</filter-class>
+    </filter>
+
+    <filter>
+        <filter-name>sitemesh</filter-name>
+        <filter-class>com.opensymphony.module.sitemesh.filter.PageFilter</filter-class>
+    </filter>
+
+    <filter-mapping>
+        <filter-name>hibernateFilter</filter-name>
+        <url-pattern>*.jspa</url-pattern>
+    </filter-mapping>
+    <filter-mapping>
+        <filter-name>sitemesh</filter-name>
+        <url-pattern>/*</url-pattern>
+    </filter-mapping>
+
+    <listener>
+        <listener-class>org.springframework.web.context.ContextLoaderListener</listener-class>
+    </listener>
+
+    <servlet>
+		<servlet-name>webwork</servlet-name>
+		<servlet-class>com.opensymphony.webwork.dispatcher.ServletDispatcher</servlet-class>
+		<load-on-startup>1</load-on-startup>
+	</servlet>
+    <servlet>
+        <servlet-name>velocity</servlet-name>
+        <servlet-class>com.opensymphony.webwork.views.velocity.WebWorkVelocityServlet</servlet-class>
+        <load-on-startup>1</load-on-startup>
+    </servlet>
+
+    <servlet-mapping>
+        <servlet-name>webwork</servlet-name>
+        <url-pattern>*.jspa</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>velocity</servlet-name>
+        <url-pattern>*.vm</url-pattern>
+    </servlet-mapping>
+
+    <session-config>
+        <session-timeout>30</session-timeout>
+    </session-config>
+
+    <welcome-file-list>
+        <welcome-file>index.jsp</welcome-file>
+    </welcome-file-list>
+
+    <taglib>
+		<taglib-uri>webwork</taglib-uri>
+		<taglib-location>/WEB-INF/lib/webwork-2.1.7.jar</taglib-location>
+	</taglib>
+    <taglib>
+        <taglib-uri>sitemesh/decorator</taglib-uri>
+        <taglib-location>/WEB-INF/tld/sitemesh-decorator.tld</taglib-location>
+    </taglib>
+    <taglib>
+        <taglib-uri>sitemesh/page</taglib-uri>
+        <taglib-location>/WEB-INF/tld/sitemesh-page.tld</taglib-location>
+    </taglib>
+
+    <resource-ref>
+        <description>Datasource</description>
+        <res-ref-name>jdbc/${project.name}DS</res-ref-name>
+        <res-type>javax.sql.DataSource</res-type>
+        <res-auth>Container</res-auth>
+    </resource-ref>
+
+</web-app>
+]]>
+            </echo>
+
+            <echo file="${project.module.@{module}.WEB-INF}/classes/log4j.xml"><![CDATA[<!DOCTYPE log4j:configuration SYSTEM "log4j.dtd">
+<log4j:configuration xmlns:log4j="http://jakarta.apache.org/log4j/" debug="false">
+
+    <!-- standerd console logger -->
+    <appender name="STDOUT" class="org.apache.log4j.ConsoleAppender">
+        <layout class="org.apache.log4j.PatternLayout">
+            <param name="ConversionPattern" value="[%-5p] %d{MM/dd/yy 'at' HH:mm:ss} : %c %x - %m%n"/>
+        </layout>
+    </appender>
+
+    <!-- file output logger -->
+<!--
+    <appender name="FILE" class="org.apache.log4j.FileAppender">
+        <param name="File" value="advoy.out" />
+        <layout class="org.apache.log4j.PatternLayout">
+            <param name="ConversionPattern" value="[%-5p] %d{MM/dd/yy 'at' HH:mm:ss} (%t) : %c %x - %m%n"/>
+        </layout>
+    </appender>
+-->
+    <category name="net.sf.ehcache">
+        <priority value="error" />
+    </category>
+
+	<category name="org.hibernate">
+        <priority value="error" />
+	</category>
+
+	<category name="org.springframework">
+        <priority value="error" />
+	</category>
+
+    <category name="com.opensymphony.xwork.util.OgnlValueStack">
+        <priority value="error" />
+    </category>
+
+    <!-- default -->
+    <root>
+        <priority value ="debug" />
+        <appender-ref ref="STDOUT" />
+    </root>
+</log4j:configuration>
+        	]]>
+            </echo>
+
+            <echo file="${project.module.@{module}.WEB-INF}/classes/xwork.xml"><![CDATA[<!DOCTYPE xwork PUBLIC "-//OpenSymphony Group//XWork 1.0//EN" "http://www.opensymphony.com/xwork/xwork-1.0.dtd">
+
+<xwork>
+	<include file="webwork-default.xml" />
+
+    <package name="public" extends="webwork-default">
+        <interceptors>
+            <interceptor name="autowireDependencies" class="com.opensymphony.xwork.spring.interceptor.ActionAutowiringInterceptor"/>
+            <interceptor-stack name="validationStack">
+                <interceptor-ref name="autowireDependencies"/>
+                <interceptor-ref name="defaultStack"/>
+                <interceptor-ref name="validationWorkflowStack"/>
+                <interceptor-ref name="chainStack"/>
+            </interceptor-stack>
+        </interceptors>
+        <default-interceptor-ref name="validationStack"/>
+
+    </package>
+
+<!--
+    <package name="entity" namespace="/entity" extends="public">
+        <action name="list" class="${base.package}.action.SomeAction" method="list">
+            <result name="success">/entity/list.jsp</result>
+        </action>
+        <action name="add" class="${base.package}.action.SomeAction">
+            <result name="success">/entity/edit.jsp</result>
+        </action>
+        <action name="edit" class="${base.package}.action.SomeAction" method="view">
+            <result name="input">/entity/list.jspa</result>
+            <result name="success">/entity/edit.jsp</result>
+        </action>
+        <action name="save" class="${base.package}.action.SomeAction" method="save">
+            <result name="input">/entity/edit.jsp</result>
+            <result name="success" type="redirect">/entity/list.jspa</result>
+        </action>
+    </package>
+-->
+</xwork>]]>
+            </echo>
+            <echo file="${project.module.@{module}.WEB-INF}/classes/validators.xml"><![CDATA[<validators>
+	<validator name="required" class="com.opensymphony.xwork.validator.validators.RequiredFieldValidator"/>
+	<validator name="requiredstring" class="com.opensymphony.xwork.validator.validators.RequiredStringValidator"/>
+	<validator name="int" class="com.opensymphony.xwork.validator.validators.IntRangeFieldValidator"/>
+	<validator name="date" class="com.opensymphony.xwork.validator.validators.DateRangeFieldValidator"/>
+	<validator name="expression" class="com.opensymphony.xwork.validator.validators.ExpressionValidator"/>
+	<validator name="fieldexpression" class="com.opensymphony.xwork.validator.validators.FieldExpressionValidator"/>
+	<validator name="email" class="com.opensymphony.xwork.validator.validators.EmailValidator"/>
+	<validator name="url" class="com.opensymphony.xwork.validator.validators.URLValidator"/>
+	<validator name="visitor" class="com.opensymphony.xwork.validator.validators.VisitorFieldValidator"/>
+	<validator name="conversion" class="com.opensymphony.xwork.validator.validators.ConversionErrorFieldValidator"/>
+</validators>
+        	]]>
+            </echo>
+
+            <mkdir dir="${base.web.dir}/decorators/"/>
+            <echo file="${base.web.dir}/decorators/main.jsp"><![CDATA[<%@ page contentType="text/html; charset=utf-8"%>
+<%@ taglib uri="webwork" prefix="ww" %>
+<%@ taglib uri="http://www.opensymphony.com/sitemesh/decorator" prefix="decorator" %>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+    <head>
+        <title>MyApp : <decorator:title default="Welcome" /></title>
+        <style type="text/css" xml:space="preserve">
+            body { font-family: sans-serif; }
+            #wrapper { width: 640px; }
+            #errors { color: #600; background: #fcc; padding: 10px; }
+
+            label { font-weight: bold; }
+
+            th { color: #fff; background: #333; }
+
+            table.list { width: 100%; }
+            table.form { width: 100%; }
+            table.form td { vertical-align: top; }
+            table.form label { text-align: right; display: block; }
+            .fineprint {font-size: .7em; color: #ccc;}
+        </style>
+        <decorator:head />
+    </head>
+    <body>
+        <div id="wrapper">
+            <h1><decorator:title default="Welcome" /></h1>
+
+            <ww:if test="errors.size > 0 || actionErrors.size > 0 || (error != null && error.length() > 0)">
+                <div id="errors">
+                    <ww:if test="errors.size > 0 || actionErrors.size > 0">
+                       <ww:iterator value="errors">
+                           <li id="error_<ww:property value="key"/>"><ww:property value="value[0]"/></li>
+                       </ww:iterator>
+                       <ww:iterator value="actionErrors">
+                           <li><ww:property/></li>
+                       </ww:iterator>
+                    </ww:if>
+                    <!-- redirect errors and messages -->
+                    <ww:if test="error != null && error.length() > 0">
+                           <li><ww:property value="error"/></li>
+                    </ww:if>
+                </div>
+            </ww:if>
+
+            <ww:if test="(actionMessage != null && actionMessages.size > 0) || (message != null && message.length() > 0">
+                <div id="messages">
+                    <ww:if test="actionMessages.size > 0">
+                        <ww:iterator value="actionMessages">
+                            <li><ww:property/></li>
+                        </ww:iterator>
+                    </ww:if>
+                    <ww:if test="message != null && message.length() > 0">
+                            <li><ww:property value="message"/></li>
+                    </ww:if>
+                </div>
+            </ww:if>
+
+            <decorator:body />
+
+            <p class="fineprint">The fine print!</p>
+        </div>
+    </body>
+</html>
+]]></echo>
+        </sequential>
+    </macrodef>
+
+    <macrodef name="module-ear-create-base">
+        <attribute name="module"/>
+        <sequential>
+            <available property="application.xml.exists" file="${project.module.@{module}.META-INF}/application.xml" />
+            <fail if="application.xml.exists">
+
+ERROR: ${project.module.@{module}.META-INF}/application.xml already exists!
+
+Did you mean to run this for a specific module with -Dmodule=[some module]
+
+</fail>
+            <mkdir dir="${project.module.@{module}.META-INF}"/>
+            <echo file="${project.module.@{module}.META-INF}/application.xml"><![CDATA[<?xml version="1.0"?>
+<!DOCTYPE application PUBLIC '-//Sun Microsystems, Inc.//DTD J2EE Application 1.2//EN' 'http://java.sun.com/j2ee/dtds/application_1_2.dtd'>
+
+<application>
+    <display-name>${project.name}</display-name>
+
+<!--
+    <module>
+        <ejb>${project.name}-ejb.jar</ejb>
+    </module>
+-->
+
+    <module>
+        <web>
+            <web-uri>${project.name}.war</web-uri>
+            <context-root>/${project.name}</context-root>
+        </web>
+    </module>
+
+</application>
+]]>
+            </echo>
+            <echo file="${project.module.@{module}.META-INF}/orion-application.xml"><![CDATA[<?xml version="1.0"?>
+<!DOCTYPE orion-application PUBLIC "-//Evermind//DTD J2EE Application runtime 1.2//EN" "http://www.orionserver.com/dtds/orion-application.dtd">
+
+<orion-application >
+
+	<data-sources path="../../applications/auto/${project.name}/META-INF/datasources.xml" />
+
+</orion-application>
+]]>
+            </echo>
+            <echo file="${project.module.@{module}.META-INF}/datasources.xml"><![CDATA[<?xml version="1.0"?>
+<!DOCTYPE data-sources PUBLIC "Orion data-sources" "http://www.orionserver.com/dtds/data-sources.dtd">
+
+<data-sources>
+	<data-source
+		class="com.evermind.sql.DriverManagerDataSource"
+		name="${project.name}DS"
+		location="jdbc/${project.name}DS"
+		xa-location="jdbc/xa/${project.name}XADS"
+		ejb-location="jdbc/${project.name}DS"
+		connection-driver="@database.driver@"
+		username="@database.username@"
+		password="@database.password@"
+		url="@database.url@"
+		inactivity-timeout="30"
+	/>
+</data-sources>
+]]>
+            </echo>
+        </sequential>
+    </macrodef>
+
+    <target name="create-base" depends="resolve">
+        <module-task type="ear" task="create-base"/>
+        <module-task type="war" task="create-base"/>
+        <mkdir dir="${etc.base.dir}/env"/>
+        <echo file="${etc.base.dir}/env/dev.properties"># database properties
+database.driver=org.hsqldb.jdbcDriver
+database.url=jdbc:hsqldb:file:./database/dev-db
+database.username=sa
+database.password=</echo>
+        <echo file="${etc.base.dir}/env/test.properties"># database properties
+database.driver=org.hsqldb.jdbcDriver
+database.url=jdbc:hsqldb:file:./build/test-db
+database.username=sa
+database.password=</echo>
+    </target>
+
+</project>

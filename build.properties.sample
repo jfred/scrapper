@@ -1,0 +1,4 @@
+j2ee.server.name=orion
+j2ee.base.dir=~/Servers/orion
+
+build.environment=dev

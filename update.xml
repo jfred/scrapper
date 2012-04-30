@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project default="update">
+
+    <property file="../build.properties" />
+    <!-- load user build settings -->
+    <property file="${user.home}/build.properties" />
+
+    <property name="update.ant.lib.dir" value="${user.home}/.ant/lib"/>
+    <mkdir dir="${update.ant.lib.dir}"/>
+
+    <property name="bsf.url" value="http://cvs.apache.org/dist/jakarta/bsf/v2.3.0rc1/bin/bsf-bin-2.3.0.zip"/>
+    <property name="bsf.jar" value="bsf.jar"/>
+    <property name="bsf.dir" value="bsf-2.3.0/lib"/>
+    <available classname="org.apache.bsf.BSFException" property="bsf.present"/>
+
+    <property name="bsh.url" value="http://www.beanshell.org/bsh-2.0b4.jar"/>
+    <property name="bsh.jar" value="bsh-2.0b4.jar"/>
+    <available classname="bsh.util.BeanShellBSFEngine" property="bsh.present"/>
+
+    <property name="ivy.url" value="http://www.jayasoft.org/downloads/ivy/1.3/ivy-1.3-bin.zip"/>
+    <property name="ivy.jar" value="ivy-1.3.jar"/>
+    <property name="ivy.dir" value="ivy-1.3"/>
+    <available classname="fr.jayasoft.ivy.ant.IvyConfigure" property="ivy.present"/>
+
+    <property name="junit.url" value="http://www.ibiblio.org/maven/junit/jars/junit-3.8.1.jar"/>
+    <property name="junit.jar" value="junit-3.8.1.jar"/>
+    <available classname="junit.framework.TestCase" property="junit.present"/>
+
+    <target name="update" depends="download.ivy,download.bsf,download.bsh,download.junit"/>
+
+    <target name="force">
+        <property name="bsf.input" value="y"/>
+        <property name="bsh.input" value="y"/>
+        <property name="ivy.input" value="y"/>
+        <property name="junit.input" value="y"/>
+        <antcall target="update" inheritAll="true"/>
+    </target>
+
+    <target name="download.bsf" unless="bsf.present">
+        <input message="Download Apache BSF (${bsf.jar} will be put into ${update.ant.lib.dir})?" validargs="y,n" addproperty="bsf.input"/>
+        <condition property="do.abort">
+            <equals arg1="n" arg2="${bsf.input}"/>
+        </condition>
+        <fail if="do.abort">Update aborted by user.</fail>
+        <get src="${bsf.url}" dest="bsf.zip" usetimestamp="true"/>
+        <mkdir dir="bsf.temp"/>
+        <unzip src="bsf.zip" dest="bsf.temp">
+            <patternset>
+                <include name="**/bsf.jar"/>
+            </patternset>
+        </unzip>
+        <copy file="bsf.temp/${bsf.dir}/${bsf.jar}" todir="${update.ant.lib.dir}"/>
+        <delete dir="bsf.temp"/>
+        <delete file="bsf.zip"/>
+    </target>
+
+    <target name="download.bsh" unless="bsf.present">
+        <input message="Download BeanShell (${bsh.jar} will be put into ${update.ant.lib.dir})?" validargs="y,n" addproperty="bsh.input"/>
+        <condition property="do.abort">
+            <equals arg1="n" arg2="${bsh.input}"/>
+        </condition>
+        <fail if="do.abort">Update aborted by user.</fail>
+        <get src="${bsh.url}" dest="${bsh.jar}" usetimestamp="true"/>
+        <copy file="${bsh.jar}" todir="${update.ant.lib.dir}"/>
+        <delete file="${bsh.jar}"/>
+    </target>
+
+    <target name="download.ivy" unless="ivy.present">
+        <input message="Download Jayasoft IVY (${ivy.jar} will be put into ${update.ant.lib.dir})?" validargs="y,n" addproperty="ivy.input"/>
+        <condition property="do.abort">
+            <equals arg1="n" arg2="${ivy.input}"/>
+        </condition>
+        <fail if="do.abort">Update aborted by user.</fail>
+        <get src="${ivy.url}" dest="ivy.zip" usetimestamp="true"/>
+        <mkdir dir="ivy.temp"/>
+        <unzip src="ivy.zip" dest="ivy.temp">
+            <patternset>
+                <include name="**/${ivy.jar}"/>
+            </patternset>
+        </unzip>
+        <copy file="ivy.temp/${ivy.dir}/${ivy.jar}" todir="${update.ant.lib.dir}"/>
+        <delete dir="ivy.temp"/>
+        <delete file="ivy.zip"/>
+    </target>
+
+    <target name="download.junit" unless="junit.present">
+        <input message="Download JUnit (${junit.jar} will be put into ${update.ant.lib.dir})?" validargs="y,n" addproperty="junit.input"/>
+        <condition property="do.abort">
+            <equals arg1="n" arg2="${junit.input}"/>
+        </condition>
+        <fail if="do.abort">Update aborted by user.</fail>
+        <get src="${junit.url}" dest="${junit.jar}" usetimestamp="true"/>
+        <copy file="${junit.jar}" todir="${update.ant.lib.dir}"/>
+        <delete file="${junit.jar}"/>
+    </target>
+
+</project>

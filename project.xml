@@ -1,0 +1,24 @@
+<project>
+<!--
+  <target name="bogus">
+    <echo>some bogus task</echo>
+  </target>
+
+  <macrodef name="somewebmodulename-war">
+    <sequential>
+      <echo>Before!</echo>
+      <module-war module="somewebmodulename" />
+      <echo>After!</echo>
+    </sequential>
+  </macrodef>
+
+    <macrodef name="module-war-war">
+      <attribute name="module" />
+      <sequential>
+        <echo>Before!</echo>
+          <module-war module="@{module}"/>
+        <echo>After!</echo>
+      </sequential>
+    </macrodef>
+-->
+</project>

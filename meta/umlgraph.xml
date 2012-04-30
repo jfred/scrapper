@@ -1,0 +1,37 @@
+<project>
+
+	<property name="umlgraph.jar" value="lib/UmlGraph.jar"/>
+
+    <!-- module specific umlgraph -->
+    <macrodef name="module-umlgraph">
+        <attribute name="module" />
+        <attribute name="src" default="${src.base.dir}/${project.module.@{module}.src}"/>
+        <attribute name="dest" default="${docs.base.dir}/api/@{module}"/>
+        <attribute name="classpath" default="javadoc.classpath"/>
+        <sequential>
+            <javadoc package="*" packagenames="multiformat" sourcepath="." access="private">
+            	<doclet name="UmlGraph" path="${umlgraph.jar}">
+ <!--             		<param name="-view" value="BaseView"/> -->
+            	</doclet>
+                <classpath>
+                    <path refid="@{classpath}"/>
+                    <fileset dir="${dist.base.dir}" includes="${project.module.@{module}.require.match} ${project.module.@{module}.require}" />
+                    <fileset dir="${lib.base.dir}"  includes="${project.module.@{module}.require.match} ${project.module.@{module}.require}" />
+                    <dirset dir="${build.base.dir}" >
+                        <depth max="1" />
+                        <include name="*"/>
+                        <include name="**/classes"/>
+                    </dirset>
+                </classpath>
+                <fileset dir="@{src}" defaultexcludes="yes">
+                    <include name="*/**/*.java" />
+                </fileset>
+            </javadoc>
+        </sequential>
+    </macrodef>
+
+    <target name="umlgraph" description="Extract a view">
+        <module-task type="jar" task="umlgraph"/>        
+    </target>
+
+</project>
